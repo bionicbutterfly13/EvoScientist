@@ -29,6 +29,11 @@ def _patch_all_questionary(mock_q):
     (steps/helpers/channels/style/wizard), and each submodule binds its own
     ``questionary`` name at import time. Patching just one location wouldn't
     intercept calls made from the others.
+
+    Also forces ``_check_npx`` to True so the skills-step easter egg never
+    probes the host: on runners where npx is missing/slow, ``_ensure_npx``
+    would otherwise fire an extra ``questionary.confirm`` and shift the
+    mocked side_effect sequences (platform-dependent StopIteration).
     """
     with (
         patch("EvoScientist.config.onboard.wizard.questionary", mock_q),
@@ -36,6 +41,7 @@ def _patch_all_questionary(mock_q):
         patch("EvoScientist.config.onboard.helpers.questionary", mock_q),
         patch("EvoScientist.config.onboard.channels.questionary", mock_q),
         patch("EvoScientist.config.onboard.style.questionary", mock_q),
+        patch("EvoScientist.config.onboard.helpers._check_npx", return_value=True),
     ):
         yield mock_q
 
