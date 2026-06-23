@@ -10,7 +10,7 @@
 <a href="https://pypi.org/project/EvoScientist/"><picture>
   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/EvoScientist/EvoScientist/main/.github/assets/badge-pypi-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/EvoScientist/EvoScientist/main/.github/assets/badge-pypi-dark.svg">
-  <img alt="PyPI v0.1.8" src="https://raw.githubusercontent.com/EvoScientist/EvoScientist/main/.github/assets/badge-pypi-light.svg" height="28">
+  <img alt="PyPI v0.1.9" src="https://raw.githubusercontent.com/EvoScientist/EvoScientist/main/.github/assets/badge-pypi-light.svg" height="28">
 </picture></a><a href="https://EvoScientist.github.io/"><picture>
   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/EvoScientist/EvoScientist/main/.github/assets/badge-website-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/EvoScientist/EvoScientist/main/.github/assets/badge-website-dark.svg">
@@ -149,6 +149,7 @@ Moving beyond traditional human-in-the-loop systems, EvoScientist adopts a human
 <details>
 <summary>📦 Release Highlights — version changelog</summary>
 
+- **[23 Jun 2026]** **[v0.1.9](https://github.com/EvoScientist/EvoScientist/releases/tag/v0.1.9)** — Hotfix for fresh installs: the first message crashed with `The subagent `task` tool cannot be exposed via `ptc`` after deepagents 0.6.11 / langchain-quickjs 0.3 reserved `task` as the REPL global. Removed `task` from the code-interpreter PTC allowlist (`task()` stays available as the REPL global; async dispatch stays in PTC) and pinned `deepagents[quickjs]~=0.6.11`.
 - **[22 Jun 2026]** **[v0.1.8](https://github.com/EvoScientist/EvoScientist/releases/tag/v0.1.8)** — LangGraph gateway layer: UI-agnostic graph & thread access shared across CLI / TUI / serve / channel; OpenRouter Anthropic prompt caching now **on by default** (opt out with `openrouter_anthropic_prompt_cache=false`); slash-command Enter now submits correctly when a command name prefixes another; pre-commit ruff bump.
 - **[16 Jun 2026]** **[v0.1.7](https://github.com/EvoScientist/EvoScientist/releases/tag/v0.1.7)** — Memory retrieval: agents run a per-task preflight over stored observations (`search_observations` ranked keyword search + `read_memory`); multi-stage slash-command completions with subcommand awareness; Windows reliability fixes (async MCP tool execution + graph-state recovery after interruptions, `cmd.exe` path quoting); quoted virtual-path handling; deepagents 0.6.10.
 - **[11 Jun 2026]** **[v0.1.6](https://github.com/EvoScientist/EvoScientist/releases/tag/v0.1.6)** — Session persistence fix: WebUI / `langgraph dev` threads survive restarts (SQLite checkpointer + scoped thread restore), memory-worker checkpoint cleanup (delete-on-completion + startup purge), short thread IDs in `/threads` and resume hints.
