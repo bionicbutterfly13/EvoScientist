@@ -182,8 +182,9 @@ def is_ccproxy_running(port: int) -> bool:
 
 # ccproxy boot includes plugin init plus Codex CLI detection (which may
 # shell out to a package manager); measured ~76s to first healthy response
-# on an Apple Silicon Mac with ccproxy-api 0.2.9.
-_CCPROXY_HEALTH_TIMEOUT_SECONDS = 120
+# on an Apple Silicon Mac with ccproxy-api 0.2.9 (~111s including the
+# auth-status checks that precede it in maybe_start_ccproxy).
+_CCPROXY_HEALTH_TIMEOUT_SECONDS = 180
 
 
 def start_ccproxy(port: int) -> subprocess.Popen:
