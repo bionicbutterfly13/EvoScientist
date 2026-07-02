@@ -127,7 +127,11 @@ def check_ccproxy_auth(provider: str = "claude_api") -> tuple[bool, str]:
             [exe, "auth", "status", provider],
             capture_output=True,
             text=True,
-            timeout=10,
+            # ccproxy's CLI initializes its full plugin system on every
+            # invocation — a cold start takes ~10s on Apple Silicon, so a
+            # 10s timeout made OAuth startup fail intermittently with
+            # "Auth check timed out".
+            timeout=30,
         )
         import re as _re
 

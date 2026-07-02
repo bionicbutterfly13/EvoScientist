@@ -52,6 +52,8 @@ class TestCheckCcproxyAuth:
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
         assert cmd[1:] == ["auth", "status", "claude_api"]
+        # ccproxy CLI cold start takes ~10s; timeout must leave headroom
+        assert mock_run.call_args[1]["timeout"] >= 30
 
     @patch("subprocess.run")
     def test_valid_auth_codex(self, mock_run):
