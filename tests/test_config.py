@@ -754,3 +754,30 @@ def test_scheduler_config_defaults_and_env(monkeypatch):
     monkeypatch.setenv("EVOSCIENTIST_SCHEDULER_DEFAULT_TIMEZONE", "America/New_York")
     eff2 = get_effective_config({})
     assert eff2.scheduler_default_timezone == "America/New_York"
+
+
+# =============================================================================
+# Dotenv isolation (issue #322)
+# =============================================================================
+
+
+class TestDotenvIsolation:
+    def test_env_file_not_leaked_into_process_env(self, tmp_path, monkeypatch):
+        """A .env in cwd must not leak into os.environ during tests.
+
+        Without the suite-wide ``_isolate_dotenv`` fixture,
+        ``get_effective_config`` loads the developer's real .env with
+        ``override=True``; an empty-valued line like ``MINIMAX_BASE_URL=``
+        then poisons ``os.environ.get(key, default)`` lookups for every
+        test that runs afterwards in the same process.
+        """
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        repro_dir = tmp_path / "repro"
+        repro_dir.mkdir()
+        (repro_dir / ".env").write_text("MINIMAX_BASE_URL=\n")
+        monkeypatch.chdir(repro_dir)
+        monkeypatch.delenv("MINIMAX_BASE_URL", raising=False)
+
+        get_effective_config()
+
+        assert "MINIMAX_BASE_URL" not in os.environ
