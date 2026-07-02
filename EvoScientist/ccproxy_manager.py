@@ -180,6 +180,12 @@ def is_ccproxy_running(port: int) -> bool:
         return False
 
 
+# ccproxy boot includes plugin init plus Codex CLI detection (which may
+# shell out to a package manager); measured ~76s to first healthy response
+# on an Apple Silicon Mac with ccproxy-api 0.2.9.
+_CCPROXY_HEALTH_TIMEOUT_SECONDS = 120
+
+
 def start_ccproxy(port: int) -> subprocess.Popen:
     """Start ccproxy serve as a background process.
 
@@ -190,7 +196,8 @@ def start_ccproxy(port: int) -> subprocess.Popen:
         The Popen handle for the ccproxy process.
 
     Raises:
-        RuntimeError: If ccproxy fails to become healthy within 30 seconds.
+        RuntimeError: If ccproxy fails to become healthy within
+            ``_CCPROXY_HEALTH_TIMEOUT_SECONDS``.
         FileNotFoundError: If ccproxy binary is not found.
     """
     exe = _ccproxy_exe() or "ccproxy"
@@ -200,8 +207,7 @@ def start_ccproxy(port: int) -> subprocess.Popen:
         stderr=subprocess.DEVNULL,
     )
 
-    # Wait for health (ccproxy can take up to ~11s on first start)
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + _CCPROXY_HEALTH_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             raise RuntimeError(
@@ -217,7 +223,10 @@ def start_ccproxy(port: int) -> subprocess.Popen:
         proc.wait(timeout=3)
     except subprocess.TimeoutExpired:
         proc.kill()
-    raise RuntimeError("ccproxy did not become healthy within 30 seconds")
+    raise RuntimeError(
+        "ccproxy did not become healthy within "
+        f"{_CCPROXY_HEALTH_TIMEOUT_SECONDS} seconds"
+    )
 
 
 def stop_ccproxy(proc: subprocess.Popen | None) -> None:
