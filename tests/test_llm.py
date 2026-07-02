@@ -2332,6 +2332,7 @@ class TestAutoConfig:
         """gpt-5.4+ and codex models get xhigh reasoning."""
         mock_init.return_value = "mock_model"
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        monkeypatch.delenv("EVOSCIENTIST_REASONING_EFFORT", raising=False)
 
         get_chat_model("gpt-5.4", provider="openai")
         assert mock_init.call_args[1]["reasoning"] == {
@@ -2348,6 +2349,20 @@ class TestAutoConfig:
         get_chat_model("gpt-5.5", provider="openai")
         assert mock_init.call_args[1]["reasoning"] == {
             "effort": "xhigh",
+            "summary": "auto",
+        }
+
+    @patch("EvoScientist.llm.models.init_chat_model")
+    def test_openai_reasoning_effort_from_env(self, mock_init, monkeypatch):
+        """Native OpenAI reasoning effort should be configurable via env var."""
+        mock_init.return_value = "mock_model"
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        monkeypatch.setenv("EVOSCIENTIST_REASONING_EFFORT", "high")
+
+        get_chat_model("gpt-5.5", provider="openai")
+
+        assert mock_init.call_args[1]["reasoning"] == {
+            "effort": "high",
             "summary": "auto",
         }
 

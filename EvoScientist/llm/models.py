@@ -332,7 +332,7 @@ def _apply_auto_config(
             # ccproxy uses Chat Completions which doesn't support reasoning.
             pass
         else:
-            _eff = (
+            _eff = os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or (
                 "xhigh"
                 if ("5.4" in model_id or "5.5" in model_id or "codex" in model_id)
                 else "high"
