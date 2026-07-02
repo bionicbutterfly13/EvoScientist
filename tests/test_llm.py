@@ -2416,6 +2416,55 @@ class TestAutoConfig:
         call_kwargs = mock_init.call_args[1]
         assert call_kwargs["reasoning"] == {"effort": "high", "summary": "auto"}
         assert "use_responses_api" not in call_kwargs
+        assert "default_headers" not in call_kwargs
+
+    @patch("EvoScientist.llm.models.init_chat_model")
+    def test_openai_ccproxy_codex_client_headers(self, mock_init, monkeypatch):
+        """ccproxy Codex mode sends Codex-CLI-shaped client headers."""
+        mock_init.return_value = "mock_model"
+        monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/codex/v1")
+        monkeypatch.setenv("OPENAI_API_KEY", "ccproxy-oauth")
+        monkeypatch.delenv("EVOSCIENTIST_CODEX_CLIENT_VERSION", raising=False)
+
+        get_chat_model("gpt-5.5", provider="openai")
+
+        from EvoScientist.llm.models import _CODEX_CLIENT_VERSION
+
+        headers = mock_init.call_args[1]["default_headers"]
+        assert headers["originator"] == "codex_cli_rs"
+        assert headers["version"] == _CODEX_CLIENT_VERSION
+        assert headers["User-Agent"].startswith(f"codex_cli_rs/{_CODEX_CLIENT_VERSION}")
+
+    @patch("EvoScientist.llm.models.init_chat_model")
+    def test_openai_ccproxy_codex_client_version_env(self, mock_init, monkeypatch):
+        """EVOSCIENTIST_CODEX_CLIENT_VERSION overrides the pinned version."""
+        mock_init.return_value = "mock_model"
+        monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/codex/v1")
+        monkeypatch.setenv("OPENAI_API_KEY", "ccproxy-oauth")
+        monkeypatch.setenv("EVOSCIENTIST_CODEX_CLIENT_VERSION", "9.9.9")
+
+        get_chat_model("gpt-5.5", provider="openai")
+
+        headers = mock_init.call_args[1]["default_headers"]
+        assert headers["version"] == "9.9.9"
+        assert headers["User-Agent"].startswith("codex_cli_rs/9.9.9")
+
+    @patch("EvoScientist.llm.models.init_chat_model")
+    def test_openai_ccproxy_codex_headers_respect_caller(self, mock_init, monkeypatch):
+        """Caller-supplied default_headers keys are not overridden."""
+        mock_init.return_value = "mock_model"
+        monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/codex/v1")
+        monkeypatch.setenv("OPENAI_API_KEY", "ccproxy-oauth")
+
+        get_chat_model(
+            "gpt-5.5",
+            provider="openai",
+            default_headers={"originator": "codex_vscode"},
+        )
+
+        headers = mock_init.call_args[1]["default_headers"]
+        assert headers["originator"] == "codex_vscode"
+        assert "version" in headers  # gap-filled
 
     @patch("EvoScientist.llm.models.init_chat_model")
     def test_openai_ccproxy_key_but_wrong_path_not_ccproxy(

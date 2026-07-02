@@ -15,6 +15,7 @@ from EvoScientist.ccproxy_manager import (
     setup_codex_env,
     start_ccproxy,
     stop_ccproxy,
+    write_ccproxy_config,
 )
 
 # =============================================================================
@@ -153,6 +154,53 @@ class TestStartCcproxy:
     def test_missing_binary(self, mock_popen):
         with pytest.raises(FileNotFoundError):
             start_ccproxy(8000)
+
+    @patch("EvoScientist.ccproxy_manager.is_ccproxy_running")
+    @patch("subprocess.Popen")
+    def test_passes_generated_config(self, mock_popen, mock_running, tmp_path):
+        proc = MagicMock()
+        proc.poll.return_value = None
+        mock_popen.return_value = proc
+        mock_running.side_effect = [True]
+
+        with patch("EvoScientist.config.get_config_dir", return_value=tmp_path):
+            start_ccproxy(8000)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--config" in cmd
+        assert cmd[cmd.index("--config") + 1] == str(tmp_path / "ccproxy.toml")
+
+    @patch("EvoScientist.ccproxy_manager.is_ccproxy_running")
+    @patch("EvoScientist.ccproxy_manager.write_ccproxy_config", side_effect=OSError)
+    @patch("subprocess.Popen")
+    def test_config_write_failure_starts_without_config(
+        self, mock_popen, mock_write, mock_running
+    ):
+        proc = MagicMock()
+        proc.poll.return_value = None
+        mock_popen.return_value = proc
+        mock_running.side_effect = [True]
+
+        start_ccproxy(8000)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--config" not in cmd
+
+
+# =============================================================================
+# write_ccproxy_config
+# =============================================================================
+
+
+class TestWriteCcproxyConfig:
+    def test_writes_codex_mapping_override(self, tmp_path):
+        with patch("EvoScientist.config.get_config_dir", return_value=tmp_path):
+            path = write_ccproxy_config()
+
+        assert path == str(tmp_path / "ccproxy.toml")
+        content = (tmp_path / "ccproxy.toml").read_text()
+        assert "[plugins.codex]" in content
+        assert "model_mappings = []" in content
 
 
 # =============================================================================

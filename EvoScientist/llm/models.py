@@ -37,6 +37,12 @@ _DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 _MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 _KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/"
 
+# Codex CLI version advertised to the ChatGPT Codex backend when routing
+# through ccproxy. The backend gates current models on the client version
+# ("The '<model>' model requires a newer version of Codex"); override with
+# EVOSCIENTIST_CODEX_CLIENT_VERSION if this pin falls behind.
+_CODEX_CLIENT_VERSION = "0.142.5"
+
 # Providers routed through the OpenAI provider with a custom base_url.
 # Maps provider name → (base_url or None, env var for API key).
 _OPENAI_ROUTED_PROVIDERS: dict[str, tuple[str | None, str]] = {
@@ -434,6 +440,21 @@ def get_chat_model(
                 # for Chat Completions tool_call duplication — not an issue
                 # with the Responses API SSE format.)
                 kwargs.pop("streaming", None)  # remove if set elsewhere
+                # ccproxy forwards client headers upstream and only
+                # gap-fills its own, so the Codex backend sees this
+                # client's identity. Without Codex-CLI-shaped headers it
+                # rejects current models ("The '<model>' model requires
+                # a newer version of Codex").
+                _codex_ver = (
+                    os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
+                    or _CODEX_CLIENT_VERSION
+                )
+                _headers = kwargs.setdefault("default_headers", {})
+                _headers.setdefault("originator", "codex_cli_rs")
+                _headers.setdefault("version", _codex_ver)
+                _headers.setdefault(
+                    "User-Agent", f"codex_cli_rs/{_codex_ver} (EvoScientist)"
+                )
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if api_key:
             kwargs["api_key"] = api_key
