@@ -165,6 +165,14 @@ class EvoScientistConfig:
     # its own port (langgraph_dev_port); this is just the browser server.
     webui_port: int = 4716
 
+    # Optional path to a local checkout of the WebUI front-end
+    # (@evoscientist/webui source). When set to a directory containing the
+    # front-end's package.json, WebUI mode runs that checkout in dev mode
+    # (npm run dev, hot-reload) instead of fetching the published package via
+    # npx — so local UI edits take effect live. Empty (default) keeps the
+    # npx @latest behavior.
+    webui_source_dir: str = ""
+
     # --- Scheduled tasks (cron) ---
     # Master switch for scheduled tasks (/schedule, NL tools, scheduler context). Defaults
     # True so the feature is available out-of-the-box; set False to disable.
@@ -684,6 +692,7 @@ _ENV_MAPPINGS = {
     "enable_async_subagents": "EVOSCIENTIST_ENABLE_ASYNC_SUBAGENTS",
     "langgraph_dev_port": "EVOSCIENTIST_LANGGRAPH_DEV_PORT",
     "webui_port": "EVOSCIENTIST_WEBUI_PORT",
+    "webui_source_dir": "EVOSCIENTIST_WEBUI_SOURCE_DIR",
     "enable_scheduler": "EVOSCIENTIST_ENABLE_SCHEDULER",
     "scheduler_default_timezone": "EVOSCIENTIST_SCHEDULER_DEFAULT_TIMEZONE",
     "code_interpreter_timeout": "EVOSCIENTIST_CODE_INTERPRETER_TIMEOUT",

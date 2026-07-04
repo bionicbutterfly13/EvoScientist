@@ -103,18 +103,30 @@ def run_webui(config: Any, workspace_dir: str | None = None) -> None:
         )
         raise typer.Exit(1)
 
-    # 3. Pre-flight the npx front-end requirement BEFORE starting the server,
-    # so a missing Node toolchain fails fast with actionable guidance.
-    npx = shutil.which("npx")
-    if not npx:
+    # 3. Pre-flight the Node toolchain BEFORE starting the server, so a missing
+    # toolchain fails fast with actionable guidance. Two front-end sources:
+    # a local checkout run in dev mode (webui_source_dir → npm run dev) or the
+    # published package via npx. Each needs a different binary on PATH.
+    source_dir = _resolve_webui_source_dir(config)
+    tool_name = "npm" if source_dir else "npx"
+    tool = shutil.which(tool_name)
+    if not tool:
+        launch_desc = (
+            f"The WebUI front-end runs from your local checkout "
+            f"([cyan]{_shorten(source_dir)}[/cyan]) with [bold]npm run dev[/bold]."
+            if source_dir
+            else (
+                "The WebUI front-end ships as the npm package "
+                "[cyan]@evoscientist/webui[/cyan] and is launched with "
+                "[bold]npx[/bold]."
+            )
+        )
         console.print(
             Panel(
                 Text.from_markup(
-                    "[bold]Node.js / npx was not found on PATH.[/bold]\n\n"
-                    "The WebUI front-end ships as the npm package "
-                    "[cyan]@evoscientist/webui[/cyan] and is launched with "
-                    "[bold]npx[/bold].\n\n"
-                    "Install [bold]Node.js 24 LTS[/bold] (which includes npx), "
+                    f"[bold]Node.js / {tool_name} was not found on PATH.[/bold]\n\n"
+                    f"{launch_desc}\n\n"
+                    "Install [bold]Node.js 24 LTS[/bold] (which includes npm/npx), "
                     "then re-run [bold]EvoSci[/bold] — or switch UI modes with "
                     "[bold]EvoSci config set ui_backend tui[/bold]."
                 ),
@@ -203,6 +215,21 @@ def run_webui(config: Any, workspace_dir: str | None = None) -> None:
             "PORT": str(webui_port),
         }
     )
+    if source_dir:
+        webui_cmd = [tool, "run", "dev", "--", "--port", str(webui_port)]
+        webui_cwd: str | None = source_dir
+        launch_line = (
+            f"[dim]Running local checkout {_shorten(source_dir)} via "
+            f"npm run dev (first compile may take a moment)…  "
+            f"Press Ctrl+C to stop.[/dim]"
+        )
+    else:
+        webui_cmd = [tool, "--yes", _WEBUI_PACKAGE, "--port", str(webui_port)]
+        webui_cwd = None
+        launch_line = (
+            f"[dim]Fetching {_WEBUI_PACKAGE} via npx (first run may take a "
+            f"moment)…  Press Ctrl+C to stop.[/dim]"
+        )
     console.print(
         Panel(
             Text.from_markup(
@@ -211,8 +238,7 @@ def run_webui(config: Any, workspace_dir: str | None = None) -> None:
                 f"[bold]WebUI:[/bold]    http://localhost:{webui_port}  "
                 f"[dim](opens in your browser)[/dim]\n"
                 f"[bold]Logs:[/bold]     {_shorten(str(RUNTIME.log_file))}\n\n"
-                f"[dim]Fetching {_WEBUI_PACKAGE} via npx (first run may take a "
-                f"moment)…  Press Ctrl+C to stop.[/dim]"
+                f"{launch_line}"
             ),
             title="[bold green]✓ EvoScientist WebUI[/bold green]",
             border_style="green",
@@ -220,19 +246,18 @@ def run_webui(config: Any, workspace_dir: str | None = None) -> None:
     )
 
     popen_kwargs: dict[str, Any] = {"env": webui_env}
+    if webui_cwd is not None:
+        popen_kwargs["cwd"] = webui_cwd
     if os.name == "posix":
         popen_kwargs["start_new_session"] = True
     elif os.name == "nt":
-        # New process group so the npx → node → next subtree can be killed as a
-        # unit by taskkill /T in _stop_webui.
+        # New process group so the npm/npx → node → next subtree can be killed
+        # as a unit by taskkill /T in _stop_webui.
         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     try:
-        webui_proc = subprocess.Popen(
-            [npx, "--yes", _WEBUI_PACKAGE, "--port", str(webui_port)],
-            **popen_kwargs,
-        )
+        webui_proc = subprocess.Popen(webui_cmd, **popen_kwargs)
     except Exception as exc:
-        console.print(f"[red]Failed to launch WebUI via npx:[/red] {exc}")
+        console.print(f"[red]Failed to launch WebUI:[/red] {exc}")
         raise typer.Exit(1) from exc
     atexit.register(_stop_webui, webui_proc)
 
@@ -315,6 +340,26 @@ def _scrubbed_env(extra: dict[str, str]) -> dict[str, str]:
     }
     env.update(extra)
     return env
+
+
+def _resolve_webui_source_dir(config: Any) -> str | None:
+    """Return an absolute path to a valid local WebUI checkout, or ``None``.
+
+    Reads ``config.webui_source_dir``. Empty → ``None`` (use npx, the default).
+    Set but not a directory containing ``package.json`` → warn and fall back to
+    npx rather than fail, so a stale path never blocks launching the UI.
+    """
+    raw = (getattr(config, "webui_source_dir", "") or "").strip()
+    if not raw:
+        return None
+    path = os.path.abspath(os.path.expanduser(raw))
+    if not (Path(path) / "package.json").is_file():
+        console.print(
+            f"[yellow]⚠ webui_source_dir [bold]{_shorten(path)}[/bold] has no "
+            f"package.json; falling back to the published package via npx.[/yellow]"
+        )
+        return None
+    return path
 
 
 def _shorten(path: str) -> str:
