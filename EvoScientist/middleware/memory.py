@@ -33,6 +33,7 @@ from ..memory import (
 )
 from ..memory.project import resolve_project_id
 from ..memory.scheduler import MemoryScheduler, ObservationLinkerContext
+from ..runtime.initiative import narration_allowed, resolve_initiative_level
 from .utils import append_to_system_message
 
 logger = logging.getLogger(__name__)
@@ -87,9 +88,14 @@ Required memory preflight:
   observation ID.
 - After this preflight, use direct tools or `code_interpreter` to do or batch
   the actual workspace work as appropriate.
-- Mention the result briefly before continuing: observation IDs used, or that
-  no relevant observation was found. Keep this preflight short.
 """
+
+# The memory-narration instruction is split out so it can be suppressed on
+# low/medium initiative turns (it is the main source of the "Reading memory /
+# no observation found" chatter). Appended only when narration is allowed.
+OBSERVATION_MEMORY_NARRATION_INSTRUCTION = """
+- Mention the result briefly before continuing: observation IDs used, or that
+  no relevant observation was found. Keep this preflight short."""
 
 OBSERVATION_MEMORY_WRITE_INSTRUCTIONS = """
 Call `record_observation` only for durable, non-obvious, evidence-backed
@@ -240,11 +246,13 @@ class EvoMemoryMiddleware(AgentMiddleware):
         enable_observation_memory: bool = True,
         enable_observation_tool: bool = True,
         memory_scheduler: MemoryScheduler | None = None,
+        initiative_default_level: str = "high",
     ) -> None:
         self._memory_dir = Path(memory_dir).expanduser()
         workspace = Path(workspace_dir or _paths.WORKSPACE_ROOT).expanduser()
         self._workspace_dir = workspace
         self._project_id = resolve_project_id(workspace)
+        self._initiative_default_level = initiative_default_level
         self._enable_profile_memory = enable_profile_memory
         self._enable_observation_memory = enable_observation_memory
         self._memory_scheduler = memory_scheduler
@@ -485,6 +493,11 @@ class EvoMemoryMiddleware(AgentMiddleware):
         instructions = OBSERVATION_MEMORY_READ_INSTRUCTIONS.format(
             project_id=self._project_id
         )
+        # Suppress the "mention the result briefly" narration on low/medium
+        # initiative turns — it is the main source of the "Reading memory / no
+        # observation found" chatter the user wants kept out of the chat.
+        if narration_allowed(resolve_initiative_level(self._initiative_default_level)):
+            instructions += OBSERVATION_MEMORY_NARRATION_INSTRUCTION
         if not self._enable_observation_tool:
             return instructions
         return instructions + OBSERVATION_MEMORY_WRITE_INSTRUCTIONS
@@ -618,6 +631,7 @@ def create_memory_middleware(
     enable_observation_memory: bool = True,
     enable_observation_tool: bool = True,
     memory_scheduler: MemoryScheduler | None = None,
+    initiative_default_level: str = "high",
 ) -> EvoMemoryMiddleware:
     """Build profile-memory middleware, defaulting to the shared memories directory."""
 
@@ -634,4 +648,5 @@ def create_memory_middleware(
         enable_observation_memory=enable_observation_memory,
         enable_observation_tool=enable_observation_tool,
         memory_scheduler=memory_scheduler,
+        initiative_default_level=initiative_default_level,
     )

@@ -232,6 +232,19 @@ class EvoScientistConfig:
     ui_backend: Literal["cli", "tui", "webui"] = "tui"
     log_level: str = "warning"
     reasoning_effort: str = "high"
+    # Default interaction mode / initiative level for the main agent:
+    # "low" (thought-partner: answer only what was asked, no next-step
+    # proposals, no memory narration), "medium" (answer + one optional next
+    # step), or "high" (today's proactive behavior; no overlay). Changed live
+    # per-session with `/initiative`; this is the persisted baseline. Default
+    # "high" keeps existing behavior for current users.
+    default_initiative: str = "high"
+    # How mid-run steering is triggered in the TUI: "explicit" (only a
+    # `/steer <text>` line slips into the running turn; plain text still queues
+    # for the next turn — the default, preserves existing queue behavior) or
+    # "always" (any text typed while busy steers the live run). Delivered by
+    # SteerMiddleware at the next model-call boundary regardless of this switch.
+    steer_mode: str = "explicit"
     # Anthropic prompt caching for OpenRouter anthropic/* models. Opt out if
     # cache-write costs outweigh the benefit for a workflow.
     openrouter_anthropic_prompt_cache: bool = True
@@ -654,6 +667,8 @@ _ENV_MAPPINGS = {
     "default_workdir": "EVOSCIENTIST_WORKSPACE_DIR",
     "ui_backend": "EVOSCIENTIST_UI_BACKEND",
     "log_level": "EVOSCIENTIST_LOG_LEVEL",
+    "default_initiative": "EVOSCIENTIST_DEFAULT_INITIATIVE",
+    "steer_mode": "EVOSCIENTIST_STEER_MODE",
     "model_fallbacks": "EVOSCIENTIST_MODEL_FALLBACKS",
     "auxiliary_provider": "EVOSCIENTIST_AUXILIARY_PROVIDER",
     "auxiliary_model": "EVOSCIENTIST_AUXILIARY_MODEL",

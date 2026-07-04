@@ -2378,7 +2378,11 @@ def run_textual_interactive(
                 return
 
             if self._busy:
-                # Queue the message to send after current turn finishes
+                # A steer slips into the RUNNING turn (SteerMiddleware drains it
+                # at the next model-call boundary). If it wasn't consumed as a
+                # steer, fall back to queuing for after the turn, as before.
+                if self._maybe_steer_while_busy(text):
+                    return
                 self._queued_messages.append(text)
                 self._render_queue_indicator()
                 return
@@ -2395,6 +2399,37 @@ def run_textual_interactive(
 
             self._history_suggester.append_entry(text)
             self._run_task = asyncio.ensure_future(self._run_turn(text))
+
+        def _maybe_steer_while_busy(self, text: str) -> bool:
+            """Slip a busy-time message into the running turn when it's a steer.
+
+            A ``/steer <text>`` line always steers. When ``steer_mode ==
+            "always"`` any busy-time text steers. Returns ``True`` when the text
+            was consumed as a steer (the caller must not also queue it).
+            """
+            from ..config import get_effective_config
+            from ..runtime.steer import parse_steer_command, push_steer
+
+            thread_id = self._conversation_tid
+
+            body = parse_steer_command(text)
+            if body is not None:
+                if not body:
+                    self.append_system(
+                        "Usage: /steer <guidance to slip into the running turn>",
+                        style="yellow",
+                    )
+                    return True
+                push_steer(thread_id, body)
+                self.append_system(f"↳ steering: {body}", style="cyan")
+                return True
+
+            if get_effective_config().steer_mode == "always":
+                push_steer(thread_id, text)
+                self.append_system(f"↳ steering: {text}", style="cyan")
+                return True
+
+            return False
 
         def on_text_area_changed(self, event: ChatTextArea.Changed) -> None:
             text = event.text_area.text

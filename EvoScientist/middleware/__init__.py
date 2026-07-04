@@ -18,6 +18,7 @@ from .context_editing import (
     create_context_editing_middleware,
 )
 from .context_overflow import ContextOverflowMapperMiddleware
+from .initiative import InitiativeMiddleware, create_initiative_middleware
 from .memory import (
     EvoMemoryMiddleware,
     create_memory_middleware,
@@ -33,6 +34,7 @@ from .scheduler import (
     SchedulerMiddleware,
     create_scheduler_middleware,
 )
+from .steer import SteerMiddleware, create_steer_middleware
 from .tool_error_handler import ToolErrorHandlerMiddleware
 from .tool_selector import create_tool_selector_middleware
 from .utils import disable_thinking
@@ -46,18 +48,22 @@ __all__ = [
     "ContextOverflowMapperMiddleware",
     "EvoMemoryLifecycleMiddleware",
     "EvoMemoryMiddleware",
+    "InitiativeMiddleware",
     "ModelFallbackMiddleware",
     "Question",
     "RuntimeContextMiddleware",
     "SchedulerMiddleware",
+    "SteerMiddleware",
     "ToolErrorHandlerMiddleware",
     "compute_context_editing_trigger",
     "create_code_interpreter_middleware",
     "create_context_editing_middleware",
+    "create_initiative_middleware",
     "create_memory_lifecycle_middleware",
     "create_memory_middleware",
     "create_runtime_context_middleware",
     "create_scheduler_middleware",
+    "create_steer_middleware",
     "create_tool_selector_middleware",
     "default_memory_scheduler",
     "disable_thinking",

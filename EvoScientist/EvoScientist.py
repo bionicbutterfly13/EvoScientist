@@ -671,10 +671,12 @@ def _get_default_middleware(
         ToolErrorHandlerMiddleware,
         create_code_interpreter_middleware,
         create_context_editing_middleware,
+        create_initiative_middleware,
         create_memory_lifecycle_middleware,
         create_memory_middleware,
         create_runtime_context_middleware,
         create_scheduler_middleware,
+        create_steer_middleware,
         create_tool_selector_middleware,
         default_memory_scheduler,
         load_fallback_chain,
@@ -710,6 +712,11 @@ def _get_default_middleware(
             MemoryObservationTarget.AGENT
         ),
         memory_scheduler=memory_scheduler,
+        # Sub-agents stay proactive (high); only the main agent honors the
+        # configured/live initiative level for memory-narration suppression.
+        initiative_default_level=(
+            "high" if for_async_subagent else cfg.default_initiative
+        ),
     )
     # Main-agent tool selection may use the auxiliary model; async sub-agents
     # keep the main model (they do real work, not a one-off helper call).
@@ -748,6 +755,18 @@ def _get_default_middleware(
     if cfg.enable_scheduler and not for_async_subagent:
         mw.append(create_scheduler_middleware())
     mw.append(create_runtime_context_middleware())
+    # Interaction-mode overlay: main agent only (sub-agents stay proactive).
+    # A no-op at "high", so default behavior is unchanged until `/initiative`
+    # lowers it. Registered after runtime context so its directive lands late
+    # in the system prompt; the memory-narration suppression is handled inside
+    # the memory middleware itself (ordering there is not load-bearing).
+    if not for_async_subagent:
+        mw.append(create_initiative_middleware(default_level=cfg.default_initiative))
+        # Slip-in steering: before_model drains the steer channel for the active
+        # thread and appends it as a HumanMessage. Main agent only — the user
+        # steers the top-level conversation, not deployed sub-agents. Inert
+        # until something is pushed onto the channel.
+        mw.append(create_steer_middleware())
     if memory_controls.memory_enabled:
         mw.append(memory_middleware)
     if memory_controls.worker_needed(worker_target):
