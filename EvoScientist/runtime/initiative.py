@@ -30,7 +30,7 @@ Resolution order (highest priority first):
 from __future__ import annotations
 
 LEVELS: tuple[str, ...] = ("low", "medium", "high")
-DEFAULT_LEVEL = "high"
+DEFAULT_LEVEL = "medium"
 
 # Process-global level set by `/initiative`. ``None`` means "unset — fall back
 # to the config default". Not thread-safe by design: like the cancel-scope, it

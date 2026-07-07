@@ -243,10 +243,10 @@ class EvoScientistConfig:
     # Default interaction mode / initiative level for the main agent:
     # "low" (thought-partner: answer only what was asked, no next-step
     # proposals, no memory narration), "medium" (answer + one optional next
-    # step), or "high" (today's proactive behavior; no overlay). Changed live
+    # step), or "high" (proactive behavior; no overlay). Changed live
     # per-session with `/initiative`; this is the persisted baseline. Default
-    # "high" keeps existing behavior for current users.
-    default_initiative: str = "high"
+    # "medium" keeps EvoScientist useful without volunteering extra work.
+    default_initiative: str = "medium"
     # How mid-run steering is triggered in the TUI: "explicit" (only a
     # `/steer <text>` line slips into the running turn; plain text still queues
     # for the next turn — the default, preserves existing queue behavior) or
@@ -725,7 +725,7 @@ def get_effective_config(
     Returns:
         EvoScientistConfig with merged values.
     """
-    load_dotenv(find_dotenv(usecwd=True), override=True)
+    load_dotenv(find_dotenv(usecwd=True), override=False)
 
     # Start with file config (includes defaults for missing values)
     config = load_config()

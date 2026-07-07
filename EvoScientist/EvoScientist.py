@@ -487,6 +487,8 @@ def _build_base_kwargs(
     if os.environ.get("TAVILY_API_KEY"):
         tool_registry["tavily_search"] = tavily_search
     base_tools = [think_tool, skill_manager]
+    if os.environ.get("TAVILY_API_KEY"):
+        base_tools.append(tavily_search)
 
     subs = load_subagents(
         SUBAGENTS_CONFIG,
@@ -549,6 +551,8 @@ def load_mcp_and_build_kwargs(
     if os.environ.get("TAVILY_API_KEY"):
         tool_registry["tavily_search"] = tavily_search
     base_tools = [think_tool, skill_manager]
+    if os.environ.get("TAVILY_API_KEY"):
+        base_tools.append(tavily_search)
 
     # Fresh tool registry — start from base tools + MCP tools
     registry = dict(tool_registry)

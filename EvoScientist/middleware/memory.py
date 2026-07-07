@@ -246,7 +246,7 @@ class EvoMemoryMiddleware(AgentMiddleware):
         enable_observation_memory: bool = True,
         enable_observation_tool: bool = True,
         memory_scheduler: MemoryScheduler | None = None,
-        initiative_default_level: str = "high",
+        initiative_default_level: str = "medium",
     ) -> None:
         self._memory_dir = Path(memory_dir).expanduser()
         workspace = Path(workspace_dir or _paths.WORKSPACE_ROOT).expanduser()
@@ -631,7 +631,7 @@ def create_memory_middleware(
     enable_observation_memory: bool = True,
     enable_observation_tool: bool = True,
     memory_scheduler: MemoryScheduler | None = None,
-    initiative_default_level: str = "high",
+    initiative_default_level: str = "medium",
 ) -> EvoMemoryMiddleware:
     """Build profile-memory middleware, defaulting to the shared memories directory."""
 

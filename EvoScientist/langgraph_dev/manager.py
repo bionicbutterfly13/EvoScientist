@@ -302,14 +302,15 @@ def is_async_subagents_available() -> bool:
 
 def _langgraph_exe() -> str | None:
     """Return the path to the langgraph CLI binary, or None if not found."""
-    found = shutil.which("langgraph")
-    if found:
-        return found
     import sys as _sys
 
     candidate = os.path.join(os.path.dirname(_sys.executable), "langgraph")
     if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
         return candidate
+
+    found = shutil.which("langgraph")
+    if found:
+        return found
     return None
 
 
@@ -737,9 +738,10 @@ def start_langgraph_dev(
     _PROCESS_WORKSPACE = workspace_dir
 
     # langgraph dev cold-starts in ~10-15s normally; first-time npx-based MCP
-    # servers can push this to 30-60s while npm fetches packages, so the budget
-    # is generous. Subsequent runs are much faster thanks to npm cache.
-    deadline = time.monotonic() + 60
+    # servers or cold dependency imports can push this past 60s, so match the
+    # ccproxy cold-start patience budget.
+    startup_timeout = 180
+    deadline = time.monotonic() + startup_timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             tail = ""
@@ -768,7 +770,8 @@ def start_langgraph_dev(
 
     stop_langgraph_dev(proc)
     raise RuntimeError(
-        f"langgraph dev did not become healthy within 60 seconds. Check {RUNTIME.log_file}"
+        f"langgraph dev did not become healthy within {startup_timeout} seconds. "
+        f"Check {RUNTIME.log_file}"
     )
 
 

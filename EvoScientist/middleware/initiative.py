@@ -2,8 +2,7 @@
 
 Appends a per-turn interaction-mode directive to the system prompt based on the
 resolved initiative level (see ``runtime/initiative.py``). ``high`` appends
-nothing, so installing this middleware is a no-op until ``/initiative low`` or
-``/initiative medium`` is set — existing behavior is unchanged by default.
+nothing; the default ``medium`` overlay keeps next-step suggestions restrained.
 
 Mirrors :class:`~EvoScientist.middleware.runtime_context.RuntimeContextMiddleware`:
 a thin ``modify_request`` that reads live state and appends to the system
@@ -29,7 +28,7 @@ from .utils import append_to_system_message
 class InitiativeMiddleware(AgentMiddleware):
     """Inject an interaction-mode directive scaled to the initiative level."""
 
-    def __init__(self, *, default_level: str = "high") -> None:
+    def __init__(self, *, default_level: str = "medium") -> None:
         self._default_level = default_level
 
     def _directive(self) -> str:
@@ -62,7 +61,7 @@ class InitiativeMiddleware(AgentMiddleware):
 
 
 def create_initiative_middleware(
-    *, default_level: str = "high"
+    *, default_level: str = "medium"
 ) -> InitiativeMiddleware:
     """Build initiative overlay middleware with the given default level."""
     return InitiativeMiddleware(default_level=default_level)

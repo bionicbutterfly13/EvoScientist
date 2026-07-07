@@ -556,17 +556,23 @@ def get_chat_model(
 
     chat_model = init_chat_model(model=model_id, model_provider=provider, **kwargs)
 
-    # Flatten list content to strings for strict OpenAI-compatible providers
-    # (DeepSeek, SiliconFlow, OpenRouter, custom-openai, etc.) and
-    # native OpenAI through a proxy, to avoid "sequence expected string" errors.
+    # Sanitize history before provider API calls.
+    # - OpenAI-compatible providers need list content flattened to avoid
+    #   "sequence expected string" errors.
+    # - Native Anthropic accepts media blocks, but rejects replayed thinking
+    #   blocks in historical assistant messages (422 "Input tag 'thinking'").
+    #   Reuse the same sanitizer with media preserved / no tool-media hoist.
     # Moonshot and Kimi Coding support standard format, no patch needed.
     _no_patch_providers = {"moonshot", "kimi-coding"}
     if (
-        _is_third_party or _is_openai_proxy
+        _is_third_party or _is_openai_proxy or provider == "anthropic"
     ) and _original_provider not in _no_patch_providers:
         # Anthropic-routed providers accept media in tool results natively;
         # only OpenAI-compatible providers need tool-media hoisting.
-        _hoist = _original_provider not in _ANTHROPIC_ROUTED_PROVIDERS
+        _hoist = (
+            provider != "anthropic"
+            and _original_provider not in _ANTHROPIC_ROUTED_PROVIDERS
+        )
         _patch_openai_compat_content(chat_model, hoist_tool_media=_hoist)
 
     # DeepSeek thinking mode requires reasoning_content passback in multi-turn
