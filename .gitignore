@@ -25,7 +25,12 @@ bridge/package-lock.json
 # IDE / Tools
 .vscode/
 .idea/
-.agents/
+.serena/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/speckit-*/
+!.agents/skills/speckit-*/**
 .claude/
 .cursor/
 .codex/
@@ -36,8 +41,14 @@ bridge/package-lock.json
 .langgraph_api/
 workspace/
 skills/
+!.agents/skills/
+!.agents/skills/speckit-*/
+!.agents/skills/speckit-*/**
 !EvoScientist/skills/
 memory/
+!.specify/memory/
+.specify/memory/*
+!.specify/memory/constitution.md
 !EvoScientist/memory/
 media/
 conversation_history/
