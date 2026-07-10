@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from . import (
+    autoskills,
     channel,
     general,
     initiative,
@@ -14,6 +15,7 @@ from . import (
 )
 
 __all__ = [
+    "autoskills",
     "channel",
     "general",
     "initiative",

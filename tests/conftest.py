@@ -6,16 +6,11 @@ import pytest
 
 
 def run_async(coro):
-    """Run an async coroutine safely, cancelling pending tasks before closing.
-
-    This prevents 'Event loop is closed' errors from asyncio.Queue cleanup
-    when tasks are still waiting on Queue.get() at teardown time.
-    """
+    """Run a coroutine and clean up pending tasks before closing its loop."""
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(coro)
     finally:
-        # Cancel all pending tasks so Queue getters don't raise on close
         pending = asyncio.all_tasks(loop)
         for task in pending:
             task.cancel()
@@ -27,7 +22,7 @@ def run_async(coro):
 
 @pytest.fixture(name="run_async")
 def run_async_fixture():
-    """Pytest fixture that exposes run_async as a callable for test functions."""
+    """Expose ``run_async`` as a fixture for tests that request it."""
     return run_async
 
 

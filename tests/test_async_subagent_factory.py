@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from EvoScientist.config import MemoryObservationWriter
+from EvoScientist.config import EvoScientistConfig, MemoryObservationWriter
 from EvoScientist.memory import MemorySourceType
 
 
@@ -112,7 +112,16 @@ def test_inject_subagent_adds_memory_middleware(mock_model, tmp_path):
     workspace.mkdir()
     subs = [{"name": "test-agent"}]
 
-    _inject_subagent_middleware(subs, workspace_dir=workspace)
+    _inject_subagent_middleware(
+        subs,
+        workspace_dir=workspace,
+        cfg=EvoScientistConfig(
+            memory_profile_enabled=True,
+            memory_observations_enabled=True,
+            memory_observation_writer=MemoryObservationWriter.ALL,
+            memory_workers_enabled=True,
+        ),
+    )
 
     _assert_subagent_memory_middleware(subs[0], source_agent="test-agent")
 

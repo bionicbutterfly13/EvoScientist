@@ -101,7 +101,7 @@ def build_async_subagent_graph(name: str) -> Any:
     # context and `/memories/profile/...` file guidance as the main agent.
     subagents = []
     _ensure_general_purpose_subagent(subagents)
-    _inject_subagent_middleware(subagents)
+    _inject_subagent_middleware(subagents, cfg=cfg)
 
     middleware = _get_default_middleware(
         for_async_subagent=True,

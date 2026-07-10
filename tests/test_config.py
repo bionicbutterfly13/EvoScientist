@@ -11,6 +11,8 @@ from EvoScientist.config import (
     MemoryControls,
     MemoryObservationTarget,
     MemoryObservationWriter,
+    MemorySkillSynthesisCadence,
+    MemorySkillSynthesisMode,
     apply_config_to_env,
     get_config_dir,
     get_config_path,
@@ -68,6 +70,10 @@ def temp_config_dir(tmp_path, monkeypatch):
         "EVOSCIENTIST_MEMORY_OBSERVATIONS_ENABLED",
         "EVOSCIENTIST_MEMORY_OBSERVATION_WRITER",
         "EVOSCIENTIST_MEMORY_WORKERS_ENABLED",
+        "EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_ENABLED",
+        "EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_MODE",
+        "EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_CADENCE",
+        "EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_TIME",
         "EVOSCIENTIST_AUXILIARY_MODEL",
         "EVOSCIENTIST_AUXILIARY_PROVIDER",
         "EVOSCIENTIST_OPENROUTER_ANTHROPIC_PROMPT_CACHE",
@@ -91,6 +97,10 @@ def clean_env(monkeypatch):
         "EVOSCIENTIST_MEMORY_OBSERVATIONS_ENABLED",
         "EVOSCIENTIST_MEMORY_OBSERVATION_WRITER",
         "EVOSCIENTIST_MEMORY_WORKERS_ENABLED",
+        "EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_ENABLED",
+        "EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_MODE",
+        "EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_CADENCE",
+        "EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_TIME",
         "EVOSCIENTIST_AUXILIARY_MODEL",
         "EVOSCIENTIST_AUXILIARY_PROVIDER",
         "EVOSCIENTIST_OPENROUTER_ANTHROPIC_PROMPT_CACHE",
@@ -125,6 +135,12 @@ class TestEvoScientistConfig:
         assert config.memory_observations_enabled is True
         assert config.memory_observation_writer == MemoryObservationWriter.ALL
         assert config.memory_workers_enabled is True
+        assert config.memory_skill_synthesis_enabled is True
+        assert config.memory_skill_synthesis_mode == MemorySkillSynthesisMode.REVIEW
+        assert (
+            config.memory_skill_synthesis_cadence == MemorySkillSynthesisCadence.WEEKLY
+        )
+        assert config.memory_skill_synthesis_time == "03:00"
         assert config.ollama_base_url == ""
         assert config.channel_debug_tracing is False
         assert config.imessage_enabled is False
@@ -226,6 +242,23 @@ class TestLoadSaveReset:
         assert data["provider"] == "openai"
         assert data["model"] == "gpt-4o"
 
+    def test_save_restricts_config_permissions(self, temp_config_dir, clean_env):
+        """Config file permissions should not depend on the process umask."""
+        original_umask = os.umask(0)
+        try:
+            save_config(EvoScientistConfig(anthropic_api_key="test-key"))
+        finally:
+            os.umask(original_umask)
+
+        config_path = get_config_path()
+        if os.name == "nt":
+            assert config_path.exists()
+            # Windows reports pseudo-permission bits, so we don't test them here.
+            return
+
+        assert config_path.parent.stat().st_mode & 0o777 == 0o700
+        assert config_path.stat().st_mode & 0o777 == 0o600
+
     def test_load_reads_saved_config(self, temp_config_dir, clean_env):
         """Test that load reads previously saved config."""
         original = EvoScientistConfig(
@@ -237,6 +270,30 @@ class TestLoadSaveReset:
         loaded = load_config()
         assert loaded.anthropic_api_key == "test-key"
         assert loaded.provider == "openai"
+
+    def test_load_reads_manually_edited_utf8_config(self, temp_config_dir, clean_env):
+        """Config loading handles localized content from manually edited YAML."""
+        config_path = get_config_path()
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(
+            "provider: openai\nmodel: gpt-4o\ndefault_workdir: /tmp/café\n",
+            encoding="utf-8",
+        )
+
+        loaded = load_config()
+
+        assert loaded.provider == "openai"
+        assert loaded.model == "gpt-4o"
+        assert loaded.default_workdir == "/tmp/café"
+
+    def test_save_writes_utf8_config(self, temp_config_dir, clean_env):
+        """Config saving writes localized content with UTF-8 encoding."""
+        save_config(EvoScientistConfig(default_workdir="/tmp/résumé"))
+
+        config_path = get_config_path()
+        raw = config_path.read_text(encoding="utf-8")
+        assert "default_workdir: /tmp/résumé" in raw
+        assert load_config().default_workdir == "/tmp/résumé"
 
     def test_reset_deletes_config_file(self, temp_config_dir, clean_env):
         """Test that reset deletes the config file."""
@@ -396,6 +453,32 @@ class TestGetSetValues:
         )
         assert all_controls.observation_tool_enabled(
             MemoryObservationTarget.SUBAGENT_WORKER
+        )
+
+    def test_set_memory_skill_synthesis_values_validate(
+        self, temp_config_dir, clean_env
+    ):
+        save_config(EvoScientistConfig())
+
+        assert set_config_value("memory_skill_synthesis_mode", "auto") is True
+        assert get_config_value("memory_skill_synthesis_mode") == "auto"
+        assert set_config_value("memory_skill_synthesis_mode", "always") is False
+        assert get_config_value("memory_skill_synthesis_mode") == "auto"
+
+        assert set_config_value("memory_skill_synthesis_cadence", "nightly") is True
+        assert get_config_value("memory_skill_synthesis_cadence") == "nightly"
+        assert set_config_value("memory_skill_synthesis_cadence", "hourly") is False
+        assert get_config_value("memory_skill_synthesis_cadence") == "nightly"
+
+        assert set_config_value("memory_skill_synthesis_time", "3:05") is True
+        assert get_config_value("memory_skill_synthesis_time") == "03:05"
+        assert set_config_value("memory_skill_synthesis_time", "24:00") is False
+        assert get_config_value("memory_skill_synthesis_time") == "03:05"
+
+        loaded = load_config()
+        assert loaded.memory_skill_synthesis_mode == MemorySkillSynthesisMode.AUTO
+        assert (
+            loaded.memory_skill_synthesis_cadence == MemorySkillSynthesisCadence.NIGHTLY
         )
 
     def test_list_config(self, temp_config_dir, clean_env):
@@ -746,14 +829,26 @@ def test_scheduler_config_defaults_and_env(monkeypatch):
     c = EvoScientistConfig()
     assert c.enable_scheduler is True
     assert c.scheduler_default_timezone == ""
+    assert c.memory_skill_synthesis_enabled is True
+    assert c.memory_skill_synthesis_mode == MemorySkillSynthesisMode.REVIEW
+    assert c.memory_skill_synthesis_cadence == MemorySkillSynthesisCadence.WEEKLY
+    assert c.memory_skill_synthesis_time == "03:00"
 
     monkeypatch.setenv("EVOSCIENTIST_ENABLE_SCHEDULER", "false")
     eff = get_effective_config({})
     assert eff.enable_scheduler is False
 
     monkeypatch.setenv("EVOSCIENTIST_SCHEDULER_DEFAULT_TIMEZONE", "America/New_York")
+    monkeypatch.setenv("EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_ENABLED", "false")
+    monkeypatch.setenv("EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_MODE", "auto")
+    monkeypatch.setenv("EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_CADENCE", "monthly")
+    monkeypatch.setenv("EVOSCIENTIST_MEMORY_SKILL_SYNTHESIS_TIME", "4:30")
     eff2 = get_effective_config({})
     assert eff2.scheduler_default_timezone == "America/New_York"
+    assert eff2.memory_skill_synthesis_enabled is False
+    assert eff2.memory_skill_synthesis_mode == MemorySkillSynthesisMode.AUTO
+    assert eff2.memory_skill_synthesis_cadence == MemorySkillSynthesisCadence.MONTHLY
+    assert eff2.memory_skill_synthesis_time == "04:30"
 
 
 # =============================================================================

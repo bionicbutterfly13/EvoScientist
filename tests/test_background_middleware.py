@@ -15,6 +15,12 @@ from EvoScientist.middleware.background import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _default_safe_mode(monkeypatch):
+    """Keep ambient runtime configuration out of background-tool tests."""
+    monkeypatch.setenv("EVOSCIENTIST_DANGEROUS_MODE", "false")
+
+
 def _sleep_cmd(seconds: int) -> str:
     """Cross-platform command that sleeps for *seconds* and exits 0."""
     if sys.platform == "win32":
