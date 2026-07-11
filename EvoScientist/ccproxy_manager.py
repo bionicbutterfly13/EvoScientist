@@ -20,6 +20,9 @@ from EvoScientist.config import EvoScientistConfig
 
 logger = logging.getLogger(__name__)
 
+_CCPROXY_AUTH_TIMEOUT_SECONDS = 30
+_CCPROXY_HEALTH_TIMEOUT_SECONDS = 180
+
 
 # =============================================================================
 # Availability & auth checks
@@ -131,7 +134,7 @@ def check_ccproxy_auth(provider: str = "claude_api") -> tuple[bool, str]:
             # invocation — a cold start takes ~10s on Apple Silicon, so a
             # 10s timeout made OAuth startup fail intermittently with
             # "Auth check timed out".
-            timeout=30,
+            timeout=_CCPROXY_AUTH_TIMEOUT_SECONDS,
         )
         import re as _re
 
@@ -180,13 +183,6 @@ def is_ccproxy_running(port: int) -> bool:
         return False
 
 
-# ccproxy boot includes plugin init plus Codex CLI detection (which may
-# shell out to a package manager); measured ~76s to first healthy response
-# on an Apple Silicon Mac with ccproxy-api 0.2.9 (~111s including the
-# auth-status checks that precede it in maybe_start_ccproxy).
-_CCPROXY_HEALTH_TIMEOUT_SECONDS = 180
-
-
 def start_ccproxy(port: int) -> subprocess.Popen:
     """Start ccproxy serve as a background process.
 
@@ -202,6 +198,11 @@ def start_ccproxy(port: int) -> subprocess.Popen:
         FileNotFoundError: If ccproxy binary is not found.
     """
     exe = _ccproxy_exe() or "ccproxy"
+    logger.warning(
+        "Starting ccproxy on port %d; first startup may take up to %d seconds",
+        port,
+        _CCPROXY_HEALTH_TIMEOUT_SECONDS,
+    )
     proc = subprocess.Popen(
         [exe, "serve", "--port", str(port)],
         stdout=subprocess.DEVNULL,
