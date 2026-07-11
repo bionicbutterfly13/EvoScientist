@@ -57,7 +57,7 @@ which ccproxy
 ### 1. Authenticate (once per machine)
 
 ```bash
-ccproxy auth login claude-api
+ccproxy auth login claude_api
 ```
 
 A browser window opens; log in with your Claude subscription account. Verify:
@@ -121,7 +121,7 @@ forwarding. Your configured model never reaches the backend. On accounts
 where `gpt-5.3-codex` is not served, every request fails with an error naming
 a model you never asked for:
 
-```
+```text
 The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.
 ```
 
@@ -147,16 +147,16 @@ ccproxy forwards your client's own `User-Agent` upstream and only gap-fills
 its Codex headers. The backend then sees a generic HTTP client instead of a
 Codex client and rejects current models:
 
-```
+```text
 The 'gpt-5.5' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.
 ```
 
 **Fix:** send Codex-CLI-shaped headers with every request. EvoScientist
 (with #324) does this automatically whenever it detects the ccproxy Codex
-route, pinned to a current Codex CLI version and overridable via the
-`EVOSCIENTIST_CODEX_CLIENT_VERSION` environment variable if the pin falls
-behind. If you probe the route manually (curl, scripts), supply them
-yourself — see Verification below.
+route. It advertises the installed Codex CLI version, with
+`EVOSCIENTIST_CODEX_CLIENT_VERSION` as an explicit override and a safe
+fallback when the CLI is unavailable. If you probe the route manually
+(curl, scripts), supply the headers yourself — see Verification below.
 
 ### 4. Model availability is account-specific
 
@@ -169,10 +169,12 @@ broken. Community measurements also indicate the Codex route enforces a
 smaller context window than the public API for the same model IDs
 (~272K for gpt-5.5 vs 1.05M on the API).
 
-> **`reasoning_effort`:** the backend runs reasoning models; EvoScientist
-> passes your configured effort (`low`/`medium`/`high`/`xhigh`) on native
-> OpenAI routes (see
-> [#321](https://github.com/EvoScientist/EvoScientist/pull/321)). Higher
+> **`reasoning_effort`:** with #324, the ccproxy Codex route uses the
+> Responses API and accepts reasoning configuration. With
+> [#321](https://github.com/EvoScientist/EvoScientist/pull/321), EvoScientist
+> passes an explicitly configured effort (`low`/`medium`/`high`/`xhigh`)
+> while preserving each model's default when it is unset. Older releases that
+> used Chat Completions on this route ignored reasoning effort. Higher
 > effort costs more latency and more of your subscription quota per request.
 
 ---
