@@ -354,7 +354,12 @@ def _apply_auto_config(
         else:
             _default_effort = (
                 "xhigh"
-                if ("5.4" in model_id or "5.5" in model_id or "codex" in model_id)
+                if (
+                    "5.4" in model_id
+                    or "5.5" in model_id
+                    or "5.6" in model_id
+                    or "codex" in model_id
+                )
                 else "high"
             )
             _eff = _resolve_reasoning_effort(_default_effort)

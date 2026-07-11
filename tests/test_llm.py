@@ -2352,6 +2352,12 @@ class TestAutoConfig:
             "summary": "auto",
         }
 
+        get_chat_model("gpt-5.6-sol", provider="openai")
+        assert mock_init.call_args[1]["reasoning"] == {
+            "effort": "xhigh",
+            "summary": "auto",
+        }
+
     @patch("EvoScientist.llm.models.init_chat_model")
     def test_openai_reasoning_effort_from_env(self, mock_init, monkeypatch):
         """Native OpenAI reasoning effort should be configurable via env var."""
