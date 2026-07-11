@@ -40,8 +40,8 @@ _DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 _MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 _KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/"
 
-# Safe fallback when Codex CLI is unavailable. Normally EvoScientist advertises
-# the installed CLI version so this value cannot silently age into model errors.
+# Minimum Codex CLI version advertised when no explicit override is set. Newer
+# installed versions are advertised automatically.
 _CODEX_CLIENT_VERSION_FALLBACK = "0.144.1"
 
 
@@ -66,7 +66,7 @@ def _installed_codex_client_version() -> str:
 
 
 def _resolve_codex_client_version() -> str:
-    """Resolve the Codex client version from override, installed CLI, or fallback."""
+    """Resolve an explicit override or the newer of installed and minimum versions."""
     override = os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
     if override:
         return override
