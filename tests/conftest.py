@@ -1,34 +1,10 @@
 """Shared fixtures for EvoScientist tests."""
 
-import asyncio
+from pathlib import Path
 
 import pytest
 
-
-def run_async(coro):
-    """Run an async coroutine safely, cancelling pending tasks before closing.
-
-    This prevents 'Event loop is closed' errors from asyncio.Queue cleanup
-    when tasks are still waiting on Queue.get() at teardown time.
-    """
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        # Cancel all pending tasks so Queue getters don't raise on close
-        pending = asyncio.all_tasks(loop)
-        for task in pending:
-            task.cancel()
-        if pending:
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
-
-
-@pytest.fixture(name="run_async")
-def run_async_fixture():
-    """Pytest fixture that exposes run_async as a callable for test functions."""
-    return run_async
+_NONEXISTENT_DOTENV = str(Path(__file__).with_name(".pytest-dotenv-does-not-exist"))
 
 
 @pytest.fixture(autouse=True)
@@ -195,7 +171,7 @@ def restore_model_passthrough_patch():
 
 
 @pytest.fixture(autouse=True)
-def _isolate_dotenv(monkeypatch, tmp_path):
+def _isolate_dotenv(monkeypatch):
     """Keep the developer's real .env out of the test environment.
 
     ``get_effective_config`` runs ``load_dotenv(find_dotenv(usecwd=True),
@@ -205,13 +181,11 @@ def _isolate_dotenv(monkeypatch, tmp_path):
     ``os.environ.get(key, default)`` return "" instead of the default,
     breaking unrelated tests later in the run (see issue #322).
 
-    Pointing ``find_dotenv`` at a path that does not exist makes
-    ``load_dotenv`` a no-op, generalizing the guard ``test_config.py``'s
-    ``temp_config_dir`` fixture already applied locally.
+    Pointing ``find_dotenv`` at a fixed path that does not exist makes
+    ``load_dotenv`` a no-op without creating a temporary directory for
+    every test.
     """
     monkeypatch.setattr(
         "EvoScientist.config.settings.find_dotenv",
-        # Use a subdirectory that is never created so tests writing their
-        # own tmp_path/.env cannot collide with the redirect target.
-        lambda *args, **kwargs: str(tmp_path / "dotenv-isolation" / ".env"),
+        lambda *args, **kwargs: _NONEXISTENT_DOTENV,
     )
