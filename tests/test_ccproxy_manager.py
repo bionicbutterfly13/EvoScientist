@@ -194,11 +194,12 @@ class TestStartCcproxy:
 
 class TestWriteCcproxyConfig:
     def test_writes_codex_mapping_override(self, tmp_path):
-        with patch("EvoScientist.config.get_config_dir", return_value=tmp_path):
+        config_dir = tmp_path / "missing" / "config"
+        with patch("EvoScientist.config.get_config_dir", return_value=config_dir):
             path = write_ccproxy_config()
 
-        assert path == str(tmp_path / "ccproxy.toml")
-        content = (tmp_path / "ccproxy.toml").read_text()
+        assert path == str(config_dir / "ccproxy.toml")
+        content = (config_dir / "ccproxy.toml").read_text(encoding="utf-8")
         assert "[plugins.codex]" in content
         assert "model_mappings = []" in content
 

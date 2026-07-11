@@ -10,7 +10,10 @@ endpoints) and convenient short names for common models.
 from __future__ import annotations
 
 import os
+import re
+import subprocess
 import warnings
+from functools import lru_cache
 from typing import Any
 
 from langchain.chat_models import init_chat_model
@@ -37,11 +40,39 @@ _DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 _MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 _KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/"
 
-# Codex CLI version advertised to the ChatGPT Codex backend when routing
-# through ccproxy. The backend gates current models on the client version
-# ("The '<model>' model requires a newer version of Codex"); override with
-# EVOSCIENTIST_CODEX_CLIENT_VERSION if this pin falls behind.
-_CODEX_CLIENT_VERSION = "0.142.5"
+# Safe fallback when Codex CLI is unavailable. Normally EvoScientist advertises
+# the installed CLI version so this value cannot silently age into model errors.
+_CODEX_CLIENT_VERSION_FALLBACK = "0.144.1"
+
+
+@lru_cache(maxsize=1)
+def _installed_codex_client_version() -> str:
+    """Return the installed Codex CLI version, or an empty string."""
+    try:
+        result = subprocess.run(
+            ["codex", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+    if result.returncode != 0:
+        return ""
+    match = re.search(r"\b(\d+\.\d+\.\d+)\b", result.stdout + result.stderr)
+    return match.group(1) if match else ""
+
+
+def _resolve_codex_client_version() -> str:
+    """Resolve the Codex client version from override, installed CLI, or fallback."""
+    return (
+        os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
+        or _installed_codex_client_version()
+        or _CODEX_CLIENT_VERSION_FALLBACK
+    )
+
 
 # Providers routed through the OpenAI provider with a custom base_url.
 # Maps provider name → (base_url or None, env var for API key).
@@ -348,16 +379,12 @@ def _apply_auto_config(
 
     # OpenAI (native, not third-party routed): reasoning
     if provider == "openai" and not is_third_party and "reasoning" not in kwargs:
-        if _is_ccproxy_codex():
-            # ccproxy uses Chat Completions which doesn't support reasoning.
-            pass
-        else:
-            _eff = (
-                "xhigh"
-                if ("5.4" in model_id or "5.5" in model_id or "codex" in model_id)
-                else "high"
-            )
-            kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
+        _eff = (
+            "xhigh"
+            if ("5.4" in model_id or "5.5" in model_id or "codex" in model_id)
+            else "high"
+        )
+        kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
 
     # Google GenAI: surface thinking traces
     if provider == "google-genai":
@@ -459,11 +486,9 @@ def get_chat_model(
                 # client's identity. Without Codex-CLI-shaped headers it
                 # rejects current models ("The '<model>' model requires
                 # a newer version of Codex").
-                _codex_ver = (
-                    os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
-                    or _CODEX_CLIENT_VERSION
-                )
-                _headers = kwargs.setdefault("default_headers", {})
+                _codex_ver = _resolve_codex_client_version()
+                _headers = kwargs.get("default_headers") or {}
+                kwargs["default_headers"] = _headers
                 _headers.setdefault("originator", "codex_cli_rs")
                 _headers.setdefault("version", _codex_ver)
                 _headers.setdefault(
