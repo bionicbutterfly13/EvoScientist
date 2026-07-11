@@ -67,11 +67,16 @@ def _installed_codex_client_version() -> str:
 
 def _resolve_codex_client_version() -> str:
     """Resolve the Codex client version from override, installed CLI, or fallback."""
-    return (
-        os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
-        or _installed_codex_client_version()
-        or _CODEX_CLIENT_VERSION_FALLBACK
-    )
+    override = os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
+    if override:
+        return override
+
+    installed = _installed_codex_client_version()
+    if installed and tuple(map(int, installed.split("."))) >= tuple(
+        map(int, _CODEX_CLIENT_VERSION_FALLBACK.split("."))
+    ):
+        return installed
+    return _CODEX_CLIENT_VERSION_FALLBACK
 
 
 # Providers routed through the OpenAI provider with a custom base_url.
@@ -492,7 +497,8 @@ def get_chat_model(
                 _headers.setdefault("originator", "codex_cli_rs")
                 _headers.setdefault("version", _codex_ver)
                 _headers.setdefault(
-                    "User-Agent", f"codex_cli_rs/{_codex_ver} (EvoScientist)"
+                    "User-Agent",
+                    f"codex_cli_rs/{_headers['version']} (EvoScientist)",
                 )
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if api_key:

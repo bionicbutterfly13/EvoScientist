@@ -2472,6 +2472,24 @@ class TestAutoConfig:
             check=False,
         )
 
+    @patch(
+        "EvoScientist.llm.models._installed_codex_client_version",
+        return_value="0.140.0",
+    )
+    def test_older_installed_codex_uses_fallback(
+        self, mock_installed_version, monkeypatch
+    ):
+        """An outdated installed CLI must not undercut the safe fallback."""
+        from EvoScientist.llm.models import (
+            _CODEX_CLIENT_VERSION_FALLBACK,
+            _resolve_codex_client_version,
+        )
+
+        monkeypatch.delenv("EVOSCIENTIST_CODEX_CLIENT_VERSION", raising=False)
+
+        assert _resolve_codex_client_version() == _CODEX_CLIENT_VERSION_FALLBACK
+        mock_installed_version.assert_called_once_with()
+
     @patch("EvoScientist.llm.models.init_chat_model")
     def test_openai_ccproxy_codex_headers_respect_caller(self, mock_init, monkeypatch):
         """Caller-supplied default_headers keys are not overridden."""
@@ -2482,12 +2500,13 @@ class TestAutoConfig:
         get_chat_model(
             "gpt-5.5",
             provider="openai",
-            default_headers={"originator": "codex_vscode"},
+            default_headers={"originator": "codex_vscode", "version": "9.9.9"},
         )
 
         headers = mock_init.call_args[1]["default_headers"]
         assert headers["originator"] == "codex_vscode"
-        assert "version" in headers  # gap-filled
+        assert headers["version"] == "9.9.9"
+        assert headers["User-Agent"].startswith("codex_cli_rs/9.9.9")
 
     @patch("EvoScientist.llm.models.init_chat_model")
     def test_openai_ccproxy_codex_none_headers(self, mock_init, monkeypatch):
