@@ -85,9 +85,13 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     # Anthropic (current generation)
     ("claude-fable-5", "claude-fable-5", "anthropic"),
     ("claude-opus-4-8", "claude-opus-4-8", "anthropic"),
+    ("claude-sonnet-5", "claude-sonnet-5", "anthropic"),
     ("claude-sonnet-4-6", "claude-sonnet-4-6", "anthropic"),
     ("claude-haiku-4-5", "claude-haiku-4-5", "anthropic"),
     # OpenAI
+    ("gpt-5.6-sol", "gpt-5.6-sol", "openai"),
+    ("gpt-5.6-terra", "gpt-5.6-terra", "openai"),
+    ("gpt-5.6-luna", "gpt-5.6-luna", "openai"),
     ("gpt-5.5-pro", "gpt-5.5-pro", "openai"),
     ("gpt-5.5", "gpt-5.5", "openai"),
     ("gpt-5.4", "gpt-5.4", "openai"),
@@ -122,6 +126,7 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     # NVIDIA
     ("nemotron-super", "nvidia/nemotron-3-super-120b-a12b", "nvidia"),
     ("nemotron-nano", "nvidia/nemotron-3-nano-30b-a3b", "nvidia"),
+    ("glm-5.2", "z-ai/glm-5.2", "nvidia"),
     ("glm4.7", "z-ai/glm4.7", "nvidia"),
     ("deepseek-v3.2", "deepseek-ai/deepseek-v3.2", "nvidia"),
     ("deepseek-v3.1", "deepseek-ai/deepseek-v3.1-terminus", "nvidia"),
@@ -133,6 +138,7 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("step-3.5-flash", "stepfun-ai/step-3.5-flash", "nvidia"),
     # SiliconFlow
     ("minimax-m2.5", "Pro/MiniMaxAI/MiniMax-M2.5", "siliconflow"),
+    ("glm-5.2", "Pro/zai-org/GLM-5.2", "siliconflow"),
     ("glm-5", "Pro/zai-org/GLM-5", "siliconflow"),
     ("kimi-k2.5", "Pro/moonshotai/Kimi-K2.5", "siliconflow"),
     ("glm-4.7", "Pro/zai-org/GLM-4.7", "siliconflow"),
@@ -140,7 +146,11 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("claude-fable-5", "anthropic/claude-fable-5", "openrouter"),
     ("claude-opus-4.8", "anthropic/claude-opus-4.8", "openrouter"),
     ("claude-opus-4.8-fast", "anthropic/claude-opus-4.8-fast", "openrouter"),
+    ("claude-sonnet-5", "anthropic/claude-sonnet-5", "openrouter"),
     ("claude-sonnet-4.6", "anthropic/claude-sonnet-4.6", "openrouter"),
+    ("gpt-5.6-sol", "openai/gpt-5.6-sol", "openrouter"),
+    ("gpt-5.6-terra", "openai/gpt-5.6-terra", "openrouter"),
+    ("gpt-5.6-luna", "openai/gpt-5.6-luna", "openrouter"),
     ("gpt-5.5-pro", "openai/gpt-5.5-pro", "openrouter"),
     ("gpt-5.5", "openai/gpt-5.5", "openrouter"),
     ("gpt-5.4", "openai/gpt-5.4", "openrouter"),
@@ -149,12 +159,14 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("gemini-3.1-pro", "google/gemini-3.1-pro-preview", "openrouter"),
     ("gemini-3-flash", "google/gemini-3-flash-preview", "openrouter"),
     ("kimi-k2.6", "moonshotai/kimi-k2.6", "openrouter"),
+    ("glm-5.2", "z-ai/glm-5.2", "openrouter"),
     ("glm-5v-turbo", "z-ai/glm-5v-turbo", "openrouter"),
     ("minimax-m3", "minimax/minimax-m3", "openrouter"),
     ("mimo-v2.5-pro", "xiaomi/mimo-v2.5-pro", "openrouter"),
     ("mimo-v2.5", "xiaomi/mimo-v2.5", "openrouter"),
     ("grok-build-0.1", "x-ai/grok-build-0.1", "openrouter"),
-    ("grok-4.3", "x-ai/grok-4.3", "openrouter"),
+    ("grok-4.5", "x-ai/grok-4.5", "openrouter"),
+    ("hy3", "tencent/hy3", "openrouter"),
     ("qwen3.7-max", "qwen/qwen3.7-max", "openrouter"),
     ("qwen3.7-plus", "qwen/qwen3.7-plus", "openrouter"),
     ("qwen3.6-flash", "qwen/qwen3.6-flash", "openrouter"),
@@ -162,12 +174,14 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("deepseek-v4-pro", "deepseek/deepseek-v4-pro", "openrouter"),
     ("deepseek-v4-flash", "deepseek/deepseek-v4-flash", "openrouter"),
     # Zhipu CodePlan (智谱代码计划 — coding-only endpoint)
+    ("glm-5.2", "glm-5.2", "zhipu-code"),
     ("glm-5.1", "glm-5.1", "zhipu-code"),
     ("glm-5", "glm-5", "zhipu-code"),
     ("glm-5-turbo", "glm-5-turbo", "zhipu-code"),
     ("glm-5v-turbo", "glm-5v-turbo", "zhipu-code"),
     ("glm-4.7", "glm-4.7", "zhipu-code"),
     # Zhipu (智谱 — general endpoint, default for simple lookups)
+    ("glm-5.2", "glm-5.2", "zhipu"),
     ("glm-5.1", "glm-5.1", "zhipu"),
     ("glm-5", "glm-5", "zhipu"),
     ("glm-5-turbo", "glm-5-turbo", "zhipu"),
@@ -590,6 +604,26 @@ def list_models_by_provider() -> list[tuple[str, str, str]]:
             seen.add(key)
             result.append((name, model_id, provider))
     return result
+
+
+async def list_model_picker_entries(
+    ollama_base_url: str | None,
+    *,
+    include_custom_ollama: bool,
+) -> list[tuple[str, str, str]]:
+    """Return model picker entries, optionally including local Ollama models."""
+    entries = list_models_by_provider()
+    if ollama_base_url:
+        from .ollama_discovery import discover_ollama_models
+
+        for detected_name in await discover_ollama_models(
+            ollama_base_url,
+            timeout=1.5,
+        ):
+            entries.append((detected_name, detected_name, "ollama"))
+        if include_custom_ollama:
+            entries.append(("Custom Ollama model...", "__custom_ollama__", "ollama"))
+    return entries
 
 
 def get_model_info(model: str) -> tuple[str, str] | None:
