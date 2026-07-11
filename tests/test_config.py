@@ -129,7 +129,7 @@ class TestEvoScientistConfig:
         assert config.show_thinking is True
         assert config.ui_backend == "tui"
         assert config.log_level == "warning"
-        assert config.reasoning_effort == "high"
+        assert config.reasoning_effort == ""
         assert config.openrouter_anthropic_prompt_cache is True
         assert config.memory_profile_enabled is True
         assert config.memory_observations_enabled is True

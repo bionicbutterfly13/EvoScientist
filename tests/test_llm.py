@@ -2238,6 +2238,11 @@ class TestPatchOpenrouterStripResponsesReasoning:
 
 
 class TestAutoConfig:
+    @pytest.fixture(autouse=True)
+    def _clear_reasoning_effort_env(self, monkeypatch):
+        """Keep auto-config tests independent of the developer environment."""
+        monkeypatch.delenv("EVOSCIENTIST_REASONING_EFFORT", raising=False)
+
     @patch("EvoScientist.llm.models.init_chat_model")
     def test_anthropic_4_5_thinking(self, mock_init, monkeypatch):
         """Anthropic 4-5 models get enabled thinking with budget."""

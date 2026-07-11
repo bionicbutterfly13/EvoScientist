@@ -37,6 +37,12 @@ _DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 _MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 _KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/"
 
+
+def _resolve_reasoning_effort(default: str) -> str:
+    """Return the configured reasoning effort or a provider-specific default."""
+    return os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or default
+
+
 # Providers routed through the OpenAI provider with a custom base_url.
 # Maps provider name → (base_url or None, env var for API key).
 _OPENAI_ROUTED_PROVIDERS: dict[str, tuple[str | None, str]] = {
@@ -346,11 +352,12 @@ def _apply_auto_config(
             # ccproxy uses Chat Completions which doesn't support reasoning.
             pass
         else:
-            _eff = os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or (
+            _default_effort = (
                 "xhigh"
                 if ("5.4" in model_id or "5.5" in model_id or "codex" in model_id)
                 else "high"
             )
+            _eff = _resolve_reasoning_effort(_default_effort)
             kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
 
     # Google GenAI: surface thinking traces
@@ -495,7 +502,7 @@ def get_chat_model(
         # passback (OpenRouter's `/responses` beta is stateless, store=false —
         # "Item with id 'rs_...' not found"); the patch strips them on passback,
         # so enabling `summary` is safe. See langchain-ai/langchain#37777.
-        effort = os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or "high"
+        effort = _resolve_reasoning_effort("high")
         kwargs.setdefault("reasoning", {"effort": effort, "summary": "auto"})
         _patch_openrouter_strip_responses_reasoning()
 
