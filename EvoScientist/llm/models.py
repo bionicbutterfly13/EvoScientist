@@ -18,6 +18,11 @@ from typing import Any
 
 from langchain.chat_models import init_chat_model
 
+from ..config.settings import (
+    OPENROUTER_DEFAULT_APP_CATEGORIES,
+    OPENROUTER_DEFAULT_APP_TITLE,
+    OPENROUTER_DEFAULT_HTTP_REFERER,
+)
 from .context_window import apply_known_context_window
 from .patches import (
     _is_ccproxy_codex,
@@ -78,6 +83,10 @@ def _resolve_codex_client_version() -> str:
         return installed
     return _CODEX_CLIENT_VERSION_FALLBACK
 
+def _resolve_reasoning_effort(default: str) -> str:
+    """Return the configured reasoning effort or a provider-specific default."""
+    return os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or default
+
 
 # Providers routed through the OpenAI provider with a custom base_url.
 # Maps provider name → (base_url or None, env var for API key).
@@ -109,6 +118,14 @@ _THINKING_CAPABLE_PROVIDERS: set[str] = {"minimax"}
 
 _TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 _FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
+
+# OpenRouter app attribution (issue #339). Default values are the single source
+# of truth in config/settings.py (imported above); langchain-openrouter maps
+# app_url → HTTP-Referer, app_title → X-Title, app_categories →
+# X-OpenRouter-Categories. OpenRouter honors at most this many categories per
+# request (server-side limit) and silently ignores the rest, so the sent list is
+# capped to this many below. https://openrouter.ai/docs/app-attribution
+_OPENROUTER_MAX_CATEGORIES_PER_REQUEST = 2
 
 # Model registry: list of (short_name, model_id, provider)
 # Allows same short_name across different providers.
@@ -384,12 +401,18 @@ def _apply_auto_config(
 
     # OpenAI (native, not third-party routed): reasoning
     if provider == "openai" and not is_third_party and "reasoning" not in kwargs:
-        _eff = (
-            "xhigh"
-            if ("5.4" in model_id or "5.5" in model_id or "codex" in model_id)
-            else "high"
-        )
-        kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
+            _default_effort = (
+                "xhigh"
+                if (
+                    "5.4" in model_id
+                    or "5.5" in model_id
+                    or "5.6" in model_id
+                    or "codex" in model_id
+                )
+                else "high"
+            )
+            _eff = _resolve_reasoning_effort(_default_effort)
+            kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
 
     # Google GenAI: surface thinking traces
     if provider == "google-genai":
@@ -547,8 +570,54 @@ def get_chat_model(
         # passback (OpenRouter's `/responses` beta is stateless, store=false —
         # "Item with id 'rs_...' not found"); the patch strips them on passback,
         # so enabling `summary` is safe. See langchain-ai/langchain#37777.
-        effort = os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or "high"
+        effort = _resolve_reasoning_effort("high")
         kwargs.setdefault("reasoning", {"effort": effort, "summary": "auto"})
+        # App attribution (issue #339): identify EvoScientist to OpenRouter so
+        # usage is credited to the project (app rankings, model app tabs,
+        # analytics) rather than langchain-openrouter's LangChain-branded
+        # defaults. setdefault so an explicit caller kwarg wins; values are
+        # configurable via EVOSCIENTIST_OPENROUTER_* env (fed from the config
+        # file by apply_config_to_env). Applied only here, so no other provider
+        # ever receives these kwargs.
+        kwargs.setdefault(
+            "app_url",
+            os.environ.get("EVOSCIENTIST_OPENROUTER_HTTP_REFERER", "").strip()
+            or OPENROUTER_DEFAULT_HTTP_REFERER,
+        )
+        kwargs.setdefault(
+            "app_title",
+            os.environ.get("EVOSCIENTIST_OPENROUTER_APP_TITLE", "").strip()
+            or OPENROUTER_DEFAULT_APP_TITLE,
+        )
+        # app_categories must be a list[str] (langchain-openrouter joins it into
+        # the X-OpenRouter-Categories header); split the comma-separated config
+        # value and drop blanks so a stray comma/space can't emit an empty one.
+        _app_categories_raw = (
+            os.environ.get("EVOSCIENTIST_OPENROUTER_APP_CATEGORIES", "").strip()
+            or OPENROUTER_DEFAULT_APP_CATEGORIES
+        )
+        _app_categories = [
+            c.strip() for c in _app_categories_raw.split(",") if c.strip()
+        ]
+        # Cap to the per-request limit and warn, so a misconfigured extra is
+        # dropped predictably here (and surfaced to the user) rather than being
+        # silently truncated server-side.
+        _limit = _OPENROUTER_MAX_CATEGORIES_PER_REQUEST
+        if len(_app_categories) > _limit:
+            warnings.warn(
+                f"OpenRouter accepts at most {_limit} app categories per "
+                f"request, so only the first {_limit} are sent: "
+                f"{_app_categories[:_limit]}. Ignoring the rest: "
+                f"{_app_categories[_limit:]}. Set "
+                f"EVOSCIENTIST_OPENROUTER_APP_CATEGORIES (or the "
+                f"openrouter_app_categories config) to at most {_limit} "
+                f"categories to silence this warning.",
+                UserWarning,
+                stacklevel=2,
+            )
+            _app_categories = _app_categories[:_limit]
+        if _app_categories:
+            kwargs.setdefault("app_categories", _app_categories)
         _patch_openrouter_strip_responses_reasoning()
 
     # Anthropic-routed providers → route through Anthropic provider with base_url
