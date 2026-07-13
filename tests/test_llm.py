@@ -2597,8 +2597,8 @@ class TestAutoConfig:
         assert call_kwargs["model_provider"] == "openai"
         assert call_kwargs["base_url"] == "http://127.0.0.1:8000/codex/v1"
         assert call_kwargs["api_key"] == "ccproxy-oauth"
-        # Proxy mode: reasoning skipped (ccproxy untested)
-        assert "reasoning" not in call_kwargs
+        # ccproxy uses the Responses API, so reasoning configuration is valid.
+        assert call_kwargs["reasoning"] == {"effort": "high", "summary": "auto"}
         # Proxy mode: Responses API (bypasses format chain), streaming ON
         assert call_kwargs["use_responses_api"] is True
         assert "streaming" not in call_kwargs
@@ -2631,6 +2631,120 @@ class TestAutoConfig:
         call_kwargs = mock_init.call_args[1]
         assert call_kwargs["reasoning"] == {"effort": "high", "summary": "auto"}
         assert "use_responses_api" not in call_kwargs
+        assert "default_headers" not in call_kwargs
+
+    @patch(
+        "EvoScientist.llm.models._installed_codex_client_version",
+        return_value="0.144.1",
+    )
+    @patch("EvoScientist.llm.models.init_chat_model")
+    def test_openai_ccproxy_codex_client_headers(
+        self, mock_init, mock_installed_version, monkeypatch
+    ):
+        """ccproxy Codex mode sends Codex-CLI-shaped client headers."""
+        mock_init.return_value = "mock_model"
+        monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/codex/v1")
+        monkeypatch.setenv("OPENAI_API_KEY", "ccproxy-oauth")
+        monkeypatch.delenv("EVOSCIENTIST_CODEX_CLIENT_VERSION", raising=False)
+
+        get_chat_model("gpt-5.5", provider="openai")
+
+        headers = mock_init.call_args[1]["default_headers"]
+        assert headers["originator"] == "codex_cli_rs"
+        assert headers["version"] == "0.144.1"
+        assert headers["User-Agent"].startswith("codex_cli_rs/0.144.1")
+        mock_installed_version.assert_called_once_with()
+        assert mock_init.call_args[1]["reasoning"]["effort"] == "xhigh"
+
+    @patch("EvoScientist.llm.models.init_chat_model")
+    def test_openai_ccproxy_codex_client_version_env(self, mock_init, monkeypatch):
+        """EVOSCIENTIST_CODEX_CLIENT_VERSION overrides the pinned version."""
+        mock_init.return_value = "mock_model"
+        monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/codex/v1")
+        monkeypatch.setenv("OPENAI_API_KEY", "ccproxy-oauth")
+        monkeypatch.setenv("EVOSCIENTIST_CODEX_CLIENT_VERSION", "9.9.9")
+
+        get_chat_model("gpt-5.5", provider="openai")
+
+        headers = mock_init.call_args[1]["default_headers"]
+        assert headers["version"] == "9.9.9"
+        assert headers["User-Agent"].startswith("codex_cli_rs/9.9.9")
+
+    @patch("EvoScientist.llm.models.subprocess.run")
+    def test_installed_codex_client_version(self, mock_run):
+        """The advertised version follows the installed Codex CLI."""
+        from EvoScientist.llm.models import _installed_codex_client_version
+
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "codex-cli 0.144.1\n"
+        mock_run.return_value.stderr = ""
+        _installed_codex_client_version.cache_clear()
+        try:
+            assert _installed_codex_client_version() == "0.144.1"
+            assert _installed_codex_client_version() == "0.144.1"
+        finally:
+            _installed_codex_client_version.cache_clear()
+        mock_run.assert_called_once_with(
+            ["codex", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+
+    @patch(
+        "EvoScientist.llm.models._installed_codex_client_version",
+        return_value="0.140.0",
+    )
+    def test_older_installed_codex_uses_fallback(
+        self, mock_installed_version, monkeypatch
+    ):
+        """An outdated installed CLI must not undercut the safe fallback."""
+        from EvoScientist.llm.models import (
+            _CODEX_CLIENT_VERSION_FALLBACK,
+            _resolve_codex_client_version,
+        )
+
+        monkeypatch.delenv("EVOSCIENTIST_CODEX_CLIENT_VERSION", raising=False)
+
+        assert _resolve_codex_client_version() == _CODEX_CLIENT_VERSION_FALLBACK
+        mock_installed_version.assert_called_once_with()
+
+    @patch("EvoScientist.llm.models.init_chat_model")
+    def test_openai_ccproxy_codex_headers_respect_caller(self, mock_init, monkeypatch):
+        """Caller-supplied default_headers keys are not overridden."""
+        mock_init.return_value = "mock_model"
+        monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/codex/v1")
+        monkeypatch.setenv("OPENAI_API_KEY", "ccproxy-oauth")
+
+        get_chat_model(
+            "gpt-5.5",
+            provider="openai",
+            default_headers={"originator": "codex_vscode", "version": "9.9.9"},
+        )
+
+        headers = mock_init.call_args[1]["default_headers"]
+        assert headers["originator"] == "codex_vscode"
+        assert headers["version"] == "9.9.9"
+        assert headers["User-Agent"].startswith("codex_cli_rs/9.9.9")
+
+    @patch("EvoScientist.llm.models.init_chat_model")
+    def test_openai_ccproxy_codex_none_headers(self, mock_init, monkeypatch):
+        """An explicit default_headers=None is normalized before gap-filling."""
+        mock_init.return_value = "mock_model"
+        monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/codex/v1")
+        monkeypatch.setenv("OPENAI_API_KEY", "ccproxy-oauth")
+        monkeypatch.setenv("EVOSCIENTIST_CODEX_CLIENT_VERSION", "9.9.9")
+
+        get_chat_model(
+            "gpt-5.5",
+            provider="openai",
+            default_headers=None,
+        )
+
+        headers = mock_init.call_args[1]["default_headers"]
+        assert headers["originator"] == "codex_cli_rs"
+        assert headers["version"] == "9.9.9"
 
     @patch("EvoScientist.llm.models.init_chat_model")
     def test_openai_ccproxy_key_but_wrong_path_not_ccproxy(
