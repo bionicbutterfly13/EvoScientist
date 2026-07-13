@@ -83,6 +83,7 @@ def _resolve_codex_client_version() -> str:
         return installed
     return _CODEX_CLIENT_VERSION_FALLBACK
 
+
 def _resolve_reasoning_effort(default: str) -> str:
     """Return the configured reasoning effort or a provider-specific default."""
     return os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or default
@@ -401,18 +402,18 @@ def _apply_auto_config(
 
     # OpenAI (native, not third-party routed): reasoning
     if provider == "openai" and not is_third_party and "reasoning" not in kwargs:
-            _default_effort = (
-                "xhigh"
-                if (
-                    "5.4" in model_id
-                    or "5.5" in model_id
-                    or "5.6" in model_id
-                    or "codex" in model_id
-                )
-                else "high"
+        _default_effort = (
+            "xhigh"
+            if (
+                "5.4" in model_id
+                or "5.5" in model_id
+                or "5.6" in model_id
+                or "codex" in model_id
             )
-            _eff = _resolve_reasoning_effort(_default_effort)
-            kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
+            else "high"
+        )
+        _eff = _resolve_reasoning_effort(_default_effort)
+        kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
 
     # Google GenAI: surface thinking traces
     if provider == "google-genai":
