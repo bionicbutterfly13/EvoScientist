@@ -50,9 +50,9 @@ Keep roles separate:
 
 Classify every claim:
 
-1. **Observed** — directly measured activation-derived readout, runtime fact, artifact property, intervention, or behavioral output under a specified protocol.
-2. **Supported inference** — a functional interpretation that survived predefined controls.
-3. **Unresolved interpretation** — construct validity, generalization, subjective experience, phenomenal consciousness, or broader cognitive meaning.
+1. **Observed:** directly measured activation-derived readout, runtime fact, artifact property, intervention, or behavioral output under a specified protocol.
+2. **Supported inference:** a functional interpretation that survived predefined controls.
+3. **Unresolved interpretation:** construct validity, generalization, subjective experience, phenomenal consciousness, or broader cognitive meaning.
 
 Never promote a sparse token readout directly from class 1 to class 2 or 3.
 
@@ -190,11 +190,11 @@ Add `--expected-sha256 <digest>` when a runtime-reported checksum is available.
 
 Do not skip stages:
 
-1. **Measurement reproduction** — environment, known example, stability, provenance.
-2. **Observational discrimination** — compare J-space with logit, output, prompt-only, random-vector, and non-J-space baselines.
-3. **Causal intervention** — only after separate authorization; predefined ablation/addition/swap controls.
-4. **Framework testing** — preregister functional predictions and alternative explanations.
-5. **System integration** — only validated typed observations cross into Sakshi, Elume, or another architecture.
+1. **Measurement reproduction:** environment, known example, stability, provenance.
+2. **Observational discrimination:** compare J-space with logit, output, prompt-only, random-vector, and non-J-space baselines.
+3. **Causal intervention:** only after separate authorization; predefined ablation/addition/swap controls.
+4. **Framework testing:** preregister functional predictions and alternative explanations.
+5. **System integration:** only validated typed observations cross into Sakshi, Elume, or another architecture.
 
 A same-runtime smoke test completes stage 1 only partially. It does not establish cross-runtime reproducibility, predictive validity, causal validity, or integration readiness.
 

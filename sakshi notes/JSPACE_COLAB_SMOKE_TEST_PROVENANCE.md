@@ -98,7 +98,7 @@ Observation measured directly:
 - Added `EvoScientist/skills/jspace-research-operations/` with an operating protocol, dated baseline reference, evidence-report template, and standard-library artifact validator.
 - The validator accepted the downloaded primary artifact with zero errors.
 - A negative test with a deliberately incorrect expected checksum returned failure as intended.
-- Full repository suite: `uv run pytest` — 2,697 passed, 10 skipped, one pre-existing Starlette/httpx deprecation warning.
+- Full repository suite: `uv run pytest`: 2,697 passed, 10 skipped, one pre-existing Starlette/httpx deprecation warning.
 - Canonical notebook identity after execution and download workflow: 16,832 bytes; SHA-256 `9696e90ed456eae5640afbcdfa1c47d6fbabe8b50f16ff85dc0ec035a21ebe85`.
 
 ## Incident and source preservation
