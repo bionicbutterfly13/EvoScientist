@@ -1,6 +1,6 @@
 # Stage 2 discrimination reference (Qwen3-1.7B Jacobian Lens)
 
-> **NOT YET EXECUTED — NO KNOWN-GOOD RUN EXISTS.** This document describes what a
+> **NOT YET EXECUTED: NO KNOWN-GOOD RUN EXISTS.** This document describes what a
 > passing Stage 2 discrimination run must contain. No such run has been
 > performed. Execution is not authorized until Dr. Mani ratifies the open
 > questions and the provisional preregistered thresholds below. Every threshold
@@ -15,8 +15,8 @@ of truth.
 
 - Prepared: 2026-07-22
 - Notebook name: `jspace_colab_stage2_discrimination.ipynb`
-- Canonical source identity: 52,257 bytes; SHA-256
-  `c39df1d0087e091e908528f68a70358ca3c83e0e04cfdad4784f10d7656d9809`
+- Canonical source identity: 52,245 bytes; SHA-256
+  `4ec078945e8eec7be8646f775048a88511af6a3237a7262999c42c3bbf35a6a1`
 - Structure: nbformat 4, 22 cells, 10 code cells
 - Stage: 2 (observational discrimination) per `SKILL.md`, "Experiment Stage Gates"
 - Prerequisite: Stage 1 (measurement reproduction) partially completed by the
