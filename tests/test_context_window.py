@@ -76,6 +76,14 @@ def test_patch_table_strips_provider_prefix():
     assert get_context_window(short) == 1_050_000
 
 
+def test_gpt_5_6_family_uses_current_context_window():
+    native = SimpleNamespace(model_name="gpt-5.6-sol", profile=None)
+    openrouter = SimpleNamespace(model_name="openai/gpt-5.6-terra", profile=None)
+
+    assert get_context_window(native) == 1_050_000
+    assert get_context_window(openrouter) == 1_050_000
+
+
 def test_real_attribute_beats_patch_table():
     model = SimpleNamespace(
         model_name="claude-opus-4.8",

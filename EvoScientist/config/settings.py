@@ -286,7 +286,9 @@ class EvoScientistConfig:
     # a deploy-style langgraph server instead of the in-terminal CLI/TUI.
     ui_backend: Literal["cli", "tui", "webui"] = "tui"
     log_level: str = "warning"
-    reasoning_effort: str = "high"
+    # Empty means use the provider/model default. A non-empty value is an
+    # explicit user override exported as EVOSCIENTIST_REASONING_EFFORT.
+    reasoning_effort: str = ""
     # Default interaction mode / initiative level for the main agent:
     # "low" (thought-partner: answer only what was asked, no next-step
     # proposals, no memory narration), "medium" (answer + one optional next

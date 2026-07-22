@@ -53,11 +53,6 @@ def temp_config_dir(tmp_path, monkeypatch):
     """Use a temporary directory for config during tests."""
     config_dir = tmp_path / "evoscientist"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    # Prevent load_dotenv from loading the project's real .env file
-    monkeypatch.setattr(
-        "EvoScientist.config.settings.find_dotenv",
-        lambda *a, **k: str(tmp_path / ".env"),
-    )
     # Also clear any API keys from environment
     for key in [
         "ANTHROPIC_API_KEY",
@@ -129,7 +124,7 @@ class TestEvoScientistConfig:
         assert config.show_thinking is True
         assert config.ui_backend == "tui"
         assert config.log_level == "warning"
-        assert config.reasoning_effort == "high"
+        assert config.reasoning_effort == ""
         assert config.openrouter_anthropic_prompt_cache is True
         assert config.memory_profile_enabled is True
         assert config.memory_observations_enabled is True
@@ -861,8 +856,8 @@ class TestDotenvIsolation:
         """A .env in cwd must not leak into os.environ during tests.
 
         Without the suite-wide ``_isolate_dotenv`` fixture,
-        ``get_effective_config`` loads the developer's real .env with
-        ``override=True``; an empty-valued line like ``MINIMAX_BASE_URL=``
+        ``get_effective_config`` loads previously unset values from the
+        developer's real .env; an empty line like ``MINIMAX_BASE_URL=``
         then poisons ``os.environ.get(key, default)`` lookups for every
         test that runs afterwards in the same process.
         """

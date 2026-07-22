@@ -40,6 +40,8 @@ _KNOWN_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 _KNOWN_MODEL_FAMILIES: list[tuple[str, int]] = [
     # All Claude — 1M via the ``context-1m-2025-08-07`` beta header.
     ("claude-", 1_000_000),
+    # OpenAI GPT-5.6 family — sol, terra, luna variants
+    ("gpt-5.6", 1_050_000),
     # OpenAI GPT-5.5 family — base, pro, future variants
     ("gpt-5.5", 1_050_000),
     # Google Gemini 3.x family — flash, flash-lite, pro (1.05M). Excludes 2.5.
