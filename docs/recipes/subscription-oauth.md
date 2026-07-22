@@ -156,7 +156,7 @@ The 'gpt-5.5' model requires a newer version of Codex. Please upgrade to the lat
 route. `EVOSCIENTIST_CODEX_CLIENT_VERSION` takes explicit precedence;
 otherwise, EvoScientist advertises the newer of the installed CLI version
 and its minimum fallback. If you probe the route manually (curl, scripts),
-supply the headers yourself — see Verification below.
+supply the headers yourself; see Verification below.
 
 ### 4. Model availability is account-specific
 
