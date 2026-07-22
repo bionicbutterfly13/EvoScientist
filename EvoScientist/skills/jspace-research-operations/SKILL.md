@@ -22,7 +22,8 @@ J-space is Anthropic's name for a model-internal subspace identified with a Jaco
 Use progressive disclosure:
 
 - Read `references/known-good-smoke-test.md` when reproducing or comparing against the pinned Qwen3-1.7B smoke test.
-- Use `scripts/validate_observation.py` after downloading a sparse observation JSON.
+- Read `references/stage2-discrimination-baseline.md` when preparing or reviewing the Stage 2 observational-discrimination study (design-only; no known-good run exists yet).
+- Use `scripts/validate_observation.py` after downloading a sparse observation JSON (auto-detects the smoke-test and discrimination/v1 schemas).
 - Use `templates/evidence-report.md` when reporting a run or handoff.
 
 ## When to Use
