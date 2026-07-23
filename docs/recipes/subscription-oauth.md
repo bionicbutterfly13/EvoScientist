@@ -57,7 +57,7 @@ which ccproxy
 ### 1. Authenticate (once per machine)
 
 ```bash
-ccproxy auth login claude-api
+ccproxy auth login claude_api
 ```
 
 A browser window opens; log in with your Claude subscription account. Verify:
@@ -121,7 +121,7 @@ forwarding. Your configured model never reaches the backend. On accounts
 where `gpt-5.3-codex` is not served, every request fails with an error naming
 a model you never asked for:
 
-```
+```text
 The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.
 ```
 
@@ -147,16 +147,16 @@ ccproxy forwards your client's own `User-Agent` upstream and only gap-fills
 its Codex headers. The backend then sees a generic HTTP client instead of a
 Codex client and rejects current models:
 
-```
+```text
 The 'gpt-5.5' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.
 ```
 
 **Fix:** send Codex-CLI-shaped headers with every request. EvoScientist
 (with #324) does this automatically whenever it detects the ccproxy Codex
-route, pinned to a current Codex CLI version and overridable via the
-`EVOSCIENTIST_CODEX_CLIENT_VERSION` environment variable if the pin falls
-behind. If you probe the route manually (curl, scripts), supply them
-yourself — see Verification below.
+route. `EVOSCIENTIST_CODEX_CLIENT_VERSION` takes explicit precedence;
+otherwise, EvoScientist advertises the newer of the installed CLI version
+and its minimum fallback. If you probe the route manually (curl, scripts),
+supply the headers yourself; see Verification below.
 
 ### 4. Model availability is account-specific
 
@@ -169,10 +169,12 @@ broken. Community measurements also indicate the Codex route enforces a
 smaller context window than the public API for the same model IDs
 (~272K for gpt-5.5 vs 1.05M on the API).
 
-> **`reasoning_effort`:** the backend runs reasoning models; EvoScientist
-> passes your configured effort (`low`/`medium`/`high`/`xhigh`) on native
-> OpenAI routes (see
-> [#321](https://github.com/EvoScientist/EvoScientist/pull/321)). Higher
+> **`reasoning_effort`:** with #324, the ccproxy Codex route uses the
+> Responses API and accepts reasoning configuration. With
+> [#321](https://github.com/EvoScientist/EvoScientist/pull/321), EvoScientist
+> passes an explicitly configured effort (`low`/`medium`/`high`/`xhigh`)
+> while preserving each model's default when it is unset. Older releases that
+> used Chat Completions on this route ignored reasoning effort. Higher
 > effort costs more latency and more of your subscription quota per request.
 
 ---
@@ -198,11 +200,12 @@ print(get_chat_model('claude-sonnet-4-6', provider='anthropic').invoke('Reply wi
 End-to-end Codex probe (headers required — Pitfall B):
 
 ```bash
+CODEX_VERSION="$(python -c 'from EvoScientist.llm.models import _resolve_codex_client_version; print(_resolve_codex_client_version())')"
 curl -sN http://127.0.0.1:8000/codex/v1/responses \
   -H "content-type: application/json" \
   -H "originator: codex_cli_rs" \
-  -H "version: 0.142.5" \
-  -H "user-agent: codex_cli_rs/0.142.5 (probe)" \
+  -H "version: ${CODEX_VERSION}" \
+  -H "user-agent: codex_cli_rs/${CODEX_VERSION} (probe)" \
   -d '{"model":"gpt-5.5","stream":true,"store":false,
        "input":[{"role":"user","content":[{"type":"input_text","text":"Reply with exactly: OK"}]}]}'
 ```
@@ -217,9 +220,9 @@ Success is an SSE stream ending in `response.completed` whose payload shows
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.` (you requested a different model) | ccproxy's default model mappings rewrote your model (Pitfall A) | Disable `model_mappings` and restart ccproxy |
-| `The '<model>' model requires a newer version of Codex. Please upgrade…` | Backend rejected the client identity (Pitfall B) | Upgrade EvoScientist to ≥ #324, or send Codex headers; bump `EVOSCIENTIST_CODEX_CLIENT_VERSION` if the pin aged |
+| `The '<model>' model requires a newer version of Codex. Please upgrade…` | Backend rejected the client identity (Pitfall B) | Use an EvoScientist build containing #324, or send Codex headers; `EVOSCIENTIST_CODEX_CLIENT_VERSION` is the explicit override |
 | `The '<model>' model is not supported…` for the model you actually requested | Your ChatGPT tier does not serve that ID | Try `gpt-5.4`; check tier |
-| `Run: ccproxy auth login codex` (or `claude-api`) on startup | No OAuth credentials on this machine | Run the login command shown |
+| `Run: ccproxy auth login codex` (or `claude_api`) on startup | No OAuth credentials on this machine | Run the login command shown |
 | `ccproxy not found` | OAuth extra not installed | `pip install 'evoscientist[oauth]'` |
 | Config change has no effect | A long-running ccproxy instance predates the config | Restart that ccproxy instance |
 

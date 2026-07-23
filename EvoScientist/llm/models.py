@@ -10,7 +10,10 @@ endpoints) and convenient short names for common models.
 from __future__ import annotations
 
 import os
+import re
+import subprocess
 import warnings
+from functools import lru_cache
 from typing import Any
 
 from langchain.chat_models import init_chat_model
@@ -37,11 +40,50 @@ _DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 _MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 _KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/"
 
-# Codex CLI version advertised to the ChatGPT Codex backend when routing
-# through ccproxy. The backend gates current models on the client version
-# ("The '<model>' model requires a newer version of Codex"); override with
-# EVOSCIENTIST_CODEX_CLIENT_VERSION if this pin falls behind.
-_CODEX_CLIENT_VERSION = "0.142.5"
+
+def _resolve_reasoning_effort(default: str) -> str:
+    """Return the configured reasoning effort or a provider-specific default."""
+    return os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or default
+
+
+# Minimum Codex CLI version advertised when no explicit override is set. Newer
+# installed versions are advertised automatically.
+_CODEX_CLIENT_VERSION_FALLBACK = "0.144.1"
+
+
+@lru_cache(maxsize=1)
+def _installed_codex_client_version() -> str:
+    """Return the installed Codex CLI version, or an empty string."""
+    try:
+        result = subprocess.run(
+            ["codex", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+    if result.returncode != 0:
+        return ""
+    match = re.search(r"\b(\d+\.\d+\.\d+)\b", result.stdout + result.stderr)
+    return match.group(1) if match else ""
+
+
+def _resolve_codex_client_version() -> str:
+    """Resolve an explicit override or the newer of installed and minimum versions."""
+    override = os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
+    if override:
+        return override
+
+    installed = _installed_codex_client_version()
+    if installed and tuple(map(int, installed.split("."))) >= tuple(
+        map(int, _CODEX_CLIENT_VERSION_FALLBACK.split("."))
+    ):
+        return installed
+    return _CODEX_CLIENT_VERSION_FALLBACK
+
 
 # Providers routed through the OpenAI provider with a custom base_url.
 # Maps provider name → (base_url or None, env var for API key).
@@ -95,6 +137,9 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("claude-sonnet-4-6", "claude-sonnet-4-6", "anthropic"),
     ("claude-haiku-4-5", "claude-haiku-4-5", "anthropic"),
     # OpenAI
+    ("gpt-5.6-sol", "gpt-5.6-sol", "openai"),
+    ("gpt-5.6-terra", "gpt-5.6-terra", "openai"),
+    ("gpt-5.6-luna", "gpt-5.6-luna", "openai"),
     ("gpt-5.5-pro", "gpt-5.5-pro", "openai"),
     ("gpt-5.5", "gpt-5.5", "openai"),
     ("gpt-5.4", "gpt-5.4", "openai"),
@@ -151,6 +196,9 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("claude-opus-4.8-fast", "anthropic/claude-opus-4.8-fast", "openrouter"),
     ("claude-sonnet-5", "anthropic/claude-sonnet-5", "openrouter"),
     ("claude-sonnet-4.6", "anthropic/claude-sonnet-4.6", "openrouter"),
+    ("gpt-5.6-sol", "openai/gpt-5.6-sol", "openrouter"),
+    ("gpt-5.6-terra", "openai/gpt-5.6-terra", "openrouter"),
+    ("gpt-5.6-luna", "openai/gpt-5.6-luna", "openrouter"),
     ("gpt-5.5-pro", "openai/gpt-5.5-pro", "openrouter"),
     ("gpt-5.5", "openai/gpt-5.5", "openrouter"),
     ("gpt-5.4", "openai/gpt-5.4", "openrouter"),
@@ -341,16 +389,18 @@ def _apply_auto_config(
 
     # OpenAI (native, not third-party routed): reasoning
     if provider == "openai" and not is_third_party and "reasoning" not in kwargs:
-        if _is_ccproxy_codex():
-            # ccproxy uses Chat Completions which doesn't support reasoning.
-            pass
-        else:
-            _eff = os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or (
-                "xhigh"
-                if ("5.4" in model_id or "5.5" in model_id or "codex" in model_id)
-                else "high"
+        _default_effort = (
+            "xhigh"
+            if (
+                "5.4" in model_id
+                or "5.5" in model_id
+                or "5.6" in model_id
+                or "codex" in model_id
             )
-            kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
+            else "high"
+        )
+        _eff = _resolve_reasoning_effort(_default_effort)
+        kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
 
     # Google GenAI: surface thinking traces
     if provider == "google-genai":
@@ -452,15 +502,14 @@ def get_chat_model(
                 # client's identity. Without Codex-CLI-shaped headers it
                 # rejects current models ("The '<model>' model requires
                 # a newer version of Codex").
-                _codex_ver = (
-                    os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
-                    or _CODEX_CLIENT_VERSION
-                )
-                _headers = kwargs.setdefault("default_headers", {})
+                _codex_ver = _resolve_codex_client_version()
+                _headers = kwargs.get("default_headers") or {}
+                kwargs["default_headers"] = _headers
                 _headers.setdefault("originator", "codex_cli_rs")
                 _headers.setdefault("version", _codex_ver)
                 _headers.setdefault(
-                    "User-Agent", f"codex_cli_rs/{_codex_ver} (EvoScientist)"
+                    "User-Agent",
+                    f"codex_cli_rs/{_headers['version']} (EvoScientist)",
                 )
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if api_key:
@@ -509,7 +558,7 @@ def get_chat_model(
         # passback (OpenRouter's `/responses` beta is stateless, store=false —
         # "Item with id 'rs_...' not found"); the patch strips them on passback,
         # so enabling `summary` is safe. See langchain-ai/langchain#37777.
-        effort = os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or "high"
+        effort = _resolve_reasoning_effort("high")
         kwargs.setdefault("reasoning", {"effort": effort, "summary": "auto"})
         _patch_openrouter_strip_responses_reasoning()
 
