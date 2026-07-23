@@ -1,8 +1,22 @@
 # Stage 2 provisional defaults (the 8 open questions)
 
-These are the adopted provisional answers to the open questions in Section 11 of
-the Stage 2 discrimination proposal. They are embedded as the notebook's
-defaults and preregistered thresholds.
+These are the adopted answers to the open questions in Section 11 of the Stage 2
+discrimination proposal. They are embedded as the notebook's defaults and
+preregistered thresholds.
+
+## RATIFIED 2026-07-23 by Dr. Mani
+
+Dr. Mani ratified all eight open questions on 2026-07-23, including Q8:
+**Stage 2 GPU execution is authorized.** The thresholds in the review below are
+now locked and binding; none may change after data collection begins.
+
+Execution follows the Stage 1 pattern: the canonical notebook stays immutable
+(gate `THRESHOLDS_RATIFIED = False` left in the design artifact by design); the
+run is performed on a disposable Colab copy where `THRESHOLDS_RATIFIED` is set to
+True in cell 4. A single Tesla T4 run, observation only, per the locked
+parameters. Results (per-prompt + aggregate `jspace-observation-discrimination/v1`
+artifacts) are validated with `scripts/validate_observation.py` and the aggregate
+decision (pass / ambiguity / fail / kill) is reported back for interpretation.
 
 ## Ratification review (2026-07-23, set on Dr. Mani's delegation)
 
@@ -30,11 +44,10 @@ to Dr. Mani and the notebook gate stays closed.
   confirmed.
 - Q6 (single T4 class): confirmed for this stage; no cross-runtime claim.
 - Q7 (extend the existing validator): confirmed; already implemented and tested.
-- Q8 (execution authorization): left to Dr. Mani. `THRESHOLDS_RATIFIED` stays
-  False. That flag is the human go/no-go signature the skill designates as Dr.
-  Mani's alone ("not a workaround"); it is not a value to set on his behalf, and
-  flipping it changes nothing until the notebook is run in Colab. When ready, set
-  `THRESHOLDS_RATIFIED = True` in cell 4. That single edit is the authorization.
+- Q8 (execution authorization): **RATIFIED by Dr. Mani 2026-07-23.** GPU
+  execution is authorized. The canonical notebook keeps
+  `THRESHOLDS_RATIFIED = False` (immutable design artifact); the run copy sets it
+  True in cell 4. That flag remains the human go/no-go signature, now given.
 
 The provisional answers below are retained verbatim for the record.
 
