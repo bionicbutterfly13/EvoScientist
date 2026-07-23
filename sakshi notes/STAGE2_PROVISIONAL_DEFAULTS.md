@@ -2,7 +2,41 @@
 
 These are the adopted provisional answers to the open questions in Section 11 of
 the Stage 2 discrimination proposal. They are embedded as the notebook's
-defaults and preregistered thresholds. None is settled.
+defaults and preregistered thresholds.
+
+## Ratification review (2026-07-23, set on Dr. Mani's delegation)
+
+Dr. Mani delegated the parameter choices ("set reasonable settings, I don't
+know"). All eight were reviewed against the design. Q1 to Q7 are confirmed
+reasonable and locked as the preregistered set; the notebook already holds these
+values, so no numbers changed. Q8 (execution authorization) is deliberately left
+to Dr. Mani and the notebook gate stays closed.
+
+- Q1 (50 prompts, 5x10): confirmed. n=50 gives the paired Wilcoxon real power; a
+  single prompt is n=1 with none.
+- Q2 (loci 6/13/20/26, position -2): confirmed. Must match Stage 1 so the s00
+  anchor reproduces, which is the kill check.
+- Q3 (model's own next-token output as target): confirmed for an observational
+  stage; no held-out task added yet.
+- Q4 thresholds: confirmed as set. Specificity margin 0.10 on at least 80% of
+  prompts against both control families; added-information median top-10 Jaccard
+  vs logit-lens at most 0.70 with paired Wilcoxon p < 0.01; kill if the s00
+  anchor's max Jacobian-logit rerun difference exceeds 0.0. These lean
+  conservative in the safe direction: they resist concluding the lens is special
+  when it is not. The 0.70 added-information bar is the most lenient constant;
+  left as is, because tightening a preregistered threshold without data risks a
+  false negative.
+- Q5 (raw text in a versioned in-repo manifest; artifacts digest-only):
+  confirmed.
+- Q6 (single T4 class): confirmed for this stage; no cross-runtime claim.
+- Q7 (extend the existing validator): confirmed; already implemented and tested.
+- Q8 (execution authorization): left to Dr. Mani. `THRESHOLDS_RATIFIED` stays
+  False. That flag is the human go/no-go signature the skill designates as Dr.
+  Mani's alone ("not a workaround"); it is not a value to set on his behalf, and
+  flipping it changes nothing until the notebook is run in Colab. When ready, set
+  `THRESHOLDS_RATIFIED = True` in cell 4. That single edit is the authorization.
+
+The provisional answers below are retained verbatim for the record.
 
 ## Q1: Sample size and categories
 
