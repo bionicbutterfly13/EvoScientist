@@ -16,9 +16,10 @@ of truth.
 - Prepared: 2026-07-22; float32-transport fix applied 2026-07-24 after the
   first Colab run (see "Runtime fix" below)
 - Notebook name: `jspace_colab_stage2_discrimination.ipynb`
-- Canonical source identity: 52,253 bytes; SHA-256
-  `95fc7efe541753599d399af393a58ede673c2896682961d5f4cda3152b383e8b`
-  (pre-fix identity was 52,245 bytes / `4ec07894...4f10d7656d9809`)
+- Canonical source identity: 52,259 bytes; SHA-256
+  `353479b0f0e959f2e207446b1383ebf632c05bf8c9a9656508cc91d98d4f28f5`
+  (identities before the two runtime fixes: 52,245 / `4ec07894...`, then
+  52,253 / `95fc7efe...`)
 - Structure: nbformat 4, 22 cells, 10 code cells
 - Stage: 2 (observational discrimination) per `SKILL.md`, "Experiment Stage Gates"
 - Prerequisite: Stage 1 (measurement reproduction) partially completed by the
@@ -161,7 +162,16 @@ straight into `lens.transport`, raising `RuntimeError: expected mat1 and mat2 to
 have the same dtype (BFloat16 != float)` at `jlens/lens.py` `transport`. Fix:
 capture residuals as float32 (`...detach().float()`), so every vector
 transported through a Jacobian is float32, matching jlens; `decode_residual`
-still casts back to the model dtype for the final norm+unembed. This is the
-notebook identity change recorded above (`95fc7efe...`). Reproduction lesson:
-when transporting your own activations through a jlens `JacobianLens` outside
-`lens.apply`, cast them to float32 first.
+still casts back to the model dtype for the final norm+unembed. Reproduction
+lesson: when transporting your own activations through a jlens `JacobianLens`
+outside `lens.apply`, cast them to float32 first.
+
+A second runtime defect surfaced on the next run: `RuntimeError: Expected all
+tensors to be on the same device (cuda:0 and cpu)` at `logit_diff_summary`.
+`lens.apply` returns its readouts on CPU (it calls `.cpu()` internally), but
+`decode_residual` returned CUDA rows for the prompt-only/random-vector/
+structure-broken baselines, so the first cross-row subtraction mismatched. Fix:
+`decode_residual` now returns `.float().cpu()`, putting all six readouts on CPU.
+Reproduction lesson: `lens.apply` returns CPU tensors; keep your own decoded
+readouts on CPU too. Both fixes together give the notebook identity
+`353479b0...` recorded above.
