@@ -1,10 +1,10 @@
 # Stage 2 discrimination reference (Qwen3-1.7B Jacobian Lens)
 
-> **NOT YET EXECUTED: NO KNOWN-GOOD RUN EXISTS.** This document describes what a
-> passing Stage 2 discrimination run must contain. No such run has been
-> performed. Execution is not authorized until Dr. Mani ratifies the open
-> questions and the provisional preregistered thresholds below. Every threshold
-> in the table is PROVISIONAL and binding only after ratification.
+> **EXECUTED 2026-07-24 on a Colab T4 (ratified by Dr. Mani). DECISION:
+> ambiguity.** The thresholds below are now locked (ratified), not provisional.
+> See "First executed run — result" near the end for the measured decision and
+> its reading. The thresholds table is retained as the preregistered record that
+> was in force when the data was collected.
 
 Use this dated reference when preparing, reviewing, or reproducing the Stage 2
 observational-discrimination study. Re-resolve every remote resource at
@@ -175,3 +175,49 @@ structure-broken baselines, so the first cross-row subtraction mismatched. Fix:
 Reproduction lesson: `lens.apply` returns CPU tensors; keep your own decoded
 readouts on CPU too. Both fixes together give the notebook identity
 `353479b0...` recorded above.
+
+## First executed run — result (2026-07-24, Colab T4)
+
+Ratified by Dr. Mani; executed on a Tesla T4 via browser automation, notebook
+identity `353479b0...`. Measured decision (aggregate print):
+
+```json
+{
+  "run_id": "f9234a9c-6a2d-43da-9fbd-bf26b19ac18c",
+  "n_prompts": 50,
+  "median_jaccard_jacobian_vs_logit_lens": 0.19444444444444442,
+  "specificity": {
+    "random_vector_fraction": 1.0,
+    "non_jspace_shuffled_fraction": 0.22,
+    "non_jspace_mismatched_fraction": 0.4
+  },
+  "decision": "ambiguity"
+}
+```
+
+Reading against the preregistered thresholds:
+
+- Reproduction: PASS (decision is not "kill") — the Stage 1 anchor reproduced.
+- Added information: PASS — median top-10 Jaccard vs the logit lens is 0.194
+  (<= 0.70). The fitted Jacobian readout is clearly distinct from the plain
+  logit lens, and fully distinct from the norm-matched random-vector control
+  (fraction 1.0).
+- Specificity: FAIL — requires a D-margin over the logit lens of >= 0.10 on
+  >= 80% of prompts for ALL three control families. random_vector clears it
+  (1.0), but the structure-broken controls do not: shuffled-layer 0.22,
+  mismatched-probe 0.40.
+- DECISION: **ambiguity** (added information holds; specificity does not).
+
+Meaning: the fitted lens carries information a cheap logit lens does not and is
+not random noise, but this run cannot separate that signal from generic
+Jacobian-transport structure — the shuffled-layer and mismatched-probe controls
+are not cleanly beaten. Per the stage gates, ambiguity does NOT promote the
+readout beyond evidence class 1 and does NOT authorize Stage 3, publication,
+transfer, or Sakshi/Elume integration. Next iteration should strengthen the
+structure-broken discrimination (more prompts; and/or revisit the D metric and
+the 0.10 margin; and/or the controls themselves) before any promotion.
+
+Performance note (not a correctness issue): the measurement took ~12 min on the
+T4, dominated by `output_argmax_rank` doing a full-vocabulary (~151k) argsort
+plus a Python int-list comprehension ~48x per prompt. A future optimization is
+to compute the target token's rank directly, e.g. `(row > row[target]).sum()+1`.
