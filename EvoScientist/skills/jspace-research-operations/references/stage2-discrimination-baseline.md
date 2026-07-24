@@ -208,6 +208,15 @@ Reading against the preregistered thresholds:
   mismatched-probe 0.40.
 - DECISION: **ambiguity** (added information holds; specificity does not).
 
+Evidence artifacts written (content-addressed, schema
+`jspace-observation-discrimination/v1`; kept in the ephemeral Colab runtime, not
+transferred — download is a separate authorization gate that was not exercised):
+50 per-prompt `jspace_observation_<sha16>.json` plus 1 aggregate
+`jspace_discrimination_251967260907468a.json` with SHA-256
+`251967260907468a7a0086446855db403cded0c4c1fe9ae889417472cc86e0dc`. The Stage 1
+anchor (stimulus s00) artifact is `22ca288fdb493e33...`. Each filename prefix
+equals the first 16 hex of its content SHA-256 (content-addressing verified).
+
 Meaning: the fitted lens carries information a cheap logit lens does not and is
 not random noise, but this run cannot separate that signal from generic
 Jacobian-transport structure — the shuffled-layer and mismatched-probe controls
