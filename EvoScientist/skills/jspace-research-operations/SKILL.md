@@ -24,6 +24,7 @@ Use progressive disclosure:
 - Read `references/known-good-smoke-test.md` when reproducing or comparing against the pinned Qwen3-1.7B smoke test.
 - Read `references/stage2-discrimination-baseline.md` when preparing or reviewing the Stage 2 observational-discrimination study (design, ratified thresholds, runtime fixes, and the first executed-run result).
 - Read `sakshi notes/STAGE2_DISCRIMINATION_REPORT.md` for the full scientific write-up of the first Stage 2 execution (idea, hypothesis, methods, results, conclusion, discussion; decision was ambiguity).
+- Read `sakshi notes/INGOING_BRIEF_ARCHIMEDES_EVOSCIENTIST.md` to start an EvoScientist run on this study: it carries the exact task, the full study, the operational journey and lessons, runtime/invocation facts, a source index with commit ids, and acceptance gates.
 - Use `scripts/validate_observation.py` after downloading a sparse observation JSON (auto-detects the smoke-test and discrimination/v1 schemas).
 - Use `templates/evidence-report.md` when reporting a run or handoff.
 
