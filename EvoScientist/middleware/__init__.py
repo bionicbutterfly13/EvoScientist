@@ -18,6 +18,7 @@ from .context_editing import (
     create_context_editing_middleware,
 )
 from .context_overflow import ContextOverflowMapperMiddleware
+from .error_normalization import ErrorNormalizationMiddleware
 from .initiative import InitiativeMiddleware, create_initiative_middleware
 from .memory import (
     EvoMemoryMiddleware,
@@ -36,6 +37,7 @@ from .scheduler import (
 )
 from .steer import SteerMiddleware, create_steer_middleware
 from .tool_error_handler import ToolErrorHandlerMiddleware
+from .tool_history_repair import ToolHistoryRepairMiddleware
 from .tool_selector import create_tool_selector_middleware
 from .utils import disable_thinking
 
@@ -46,6 +48,7 @@ __all__ = [
     "Choice",
     "ConfigurableModelMiddleware",
     "ContextOverflowMapperMiddleware",
+    "ErrorNormalizationMiddleware",
     "EvoMemoryLifecycleMiddleware",
     "EvoMemoryMiddleware",
     "InitiativeMiddleware",
@@ -55,6 +58,7 @@ __all__ = [
     "SchedulerMiddleware",
     "SteerMiddleware",
     "ToolErrorHandlerMiddleware",
+    "ToolHistoryRepairMiddleware",
     "compute_context_editing_trigger",
     "create_code_interpreter_middleware",
     "create_context_editing_middleware",

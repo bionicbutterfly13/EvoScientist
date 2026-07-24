@@ -123,6 +123,16 @@ def get_config_path() -> Path:
 # Configuration dataclass
 # =============================================================================
 
+# OpenRouter app-attribution defaults (issue #339). Single source of truth: the
+# EvoScientistConfig fields below default to these, and llm/models.py imports
+# them for its env-fallback, so the values never drift across the two layers.
+OPENROUTER_DEFAULT_HTTP_REFERER = "https://github.com/EvoScientist/EvoScientist"
+OPENROUTER_DEFAULT_APP_TITLE = "EvoScientist"
+# OpenRouter honors only the first 2 categories per request (server-side limit)
+# and silently ignores the rest, so keep the two most relevant ones. Chosen per
+# maintainer review — creative-writing is a less competitive marketplace group.
+OPENROUTER_DEFAULT_APP_CATEGORIES = "creative-writing,personal-agent"
+
 
 @dataclass
 class EvoScientistConfig:
@@ -202,14 +212,6 @@ class EvoScientistConfig:
     # its own port (langgraph_dev_port); this is just the browser server.
     webui_port: int = 4716
 
-    # Optional path to a local checkout of the WebUI front-end
-    # (@evoscientist/webui source). When set to a directory containing the
-    # front-end's package.json, WebUI mode runs that checkout in dev mode
-    # (npm run dev, hot-reload) instead of fetching the published package via
-    # npx — so local UI edits take effect live. Empty (default) keeps the
-    # npx @latest behavior.
-    webui_source_dir: str = ""
-
     # --- Scheduled tasks (cron) ---
     # Master switch for scheduled tasks (/schedule, NL tools, scheduler context). Defaults
     # True so the feature is available out-of-the-box; set False to disable.
@@ -286,7 +288,9 @@ class EvoScientistConfig:
     # a deploy-style langgraph server instead of the in-terminal CLI/TUI.
     ui_backend: Literal["cli", "tui", "webui"] = "tui"
     log_level: str = "warning"
-    reasoning_effort: str = "high"
+    # Empty means use the provider/model default. A non-empty value is an
+    # explicit user override exported as EVOSCIENTIST_REASONING_EFFORT.
+    reasoning_effort: str = ""
     # Default interaction mode / initiative level for the main agent:
     # "low" (thought-partner: answer only what was asked, no next-step
     # proposals, no memory narration), "medium" (answer + one optional next
@@ -296,13 +300,22 @@ class EvoScientistConfig:
     default_initiative: str = "medium"
     # How mid-run steering is triggered in the TUI: "explicit" (only a
     # `/steer <text>` line slips into the running turn; plain text still queues
-    # for the next turn — the default, preserves existing queue behavior) or
+    # for the next turn, the default that preserves existing queue behavior) or
     # "always" (any text typed while busy steers the live run). Delivered by
     # SteerMiddleware at the next model-call boundary regardless of this switch.
     steer_mode: str = "explicit"
     # Anthropic prompt caching for OpenRouter anthropic/* models. Opt out if
     # cache-write costs outweigh the benefit for a workflow.
     openrouter_anthropic_prompt_cache: bool = True
+    # OpenRouter app attribution (issue #339). Sent only for the openrouter
+    # provider; identifies EvoScientist in OpenRouter's app rankings/analytics.
+    # Override (e.g. a private fork) via these fields or their env vars.
+    # Defaults live in the module constants above (also imported by llm/models.py).
+    openrouter_http_referer: str = OPENROUTER_DEFAULT_HTTP_REFERER
+    openrouter_app_title: str = OPENROUTER_DEFAULT_APP_TITLE
+    # Comma-separated; split into a list before being passed to
+    # langchain-openrouter (its app_categories kwarg expects list[str]).
+    openrouter_app_categories: str = OPENROUTER_DEFAULT_APP_CATEGORIES
 
     # Channel Settings
     channel_enabled: str = ""  # "imessage" | "telegram" | "discord" | "slack" | "wechat" | "dingtalk" | "feishu" | "email" | "qq" | "signal" | "" (comma-separated for multiple)
@@ -775,8 +788,6 @@ _ENV_MAPPINGS = {
     "default_workdir": "EVOSCIENTIST_WORKSPACE_DIR",
     "ui_backend": "EVOSCIENTIST_UI_BACKEND",
     "log_level": "EVOSCIENTIST_LOG_LEVEL",
-    "default_initiative": "EVOSCIENTIST_DEFAULT_INITIATIVE",
-    "steer_mode": "EVOSCIENTIST_STEER_MODE",
     "model_fallbacks": "EVOSCIENTIST_MODEL_FALLBACKS",
     "auxiliary_provider": "EVOSCIENTIST_AUXILIARY_PROVIDER",
     "auxiliary_model": "EVOSCIENTIST_AUXILIARY_MODEL",
@@ -784,6 +795,9 @@ _ENV_MAPPINGS = {
     "openrouter_anthropic_prompt_cache": (
         "EVOSCIENTIST_OPENROUTER_ANTHROPIC_PROMPT_CACHE"
     ),
+    "openrouter_http_referer": "EVOSCIENTIST_OPENROUTER_HTTP_REFERER",
+    "openrouter_app_title": "EVOSCIENTIST_OPENROUTER_APP_TITLE",
+    "openrouter_app_categories": "EVOSCIENTIST_OPENROUTER_APP_CATEGORIES",
     "dangerous_mode": "EVOSCIENTIST_DANGEROUS_MODE",
     "channel_debug_tracing": "EVOSCIENTIST_CHANNEL_DEBUG_TRACING",
     "ccproxy_port": "EVOSCIENTIST_CCPROXY_PORT",
@@ -792,7 +806,6 @@ _ENV_MAPPINGS = {
     "enable_async_subagents": "EVOSCIENTIST_ENABLE_ASYNC_SUBAGENTS",
     "langgraph_dev_port": "EVOSCIENTIST_LANGGRAPH_DEV_PORT",
     "webui_port": "EVOSCIENTIST_WEBUI_PORT",
-    "webui_source_dir": "EVOSCIENTIST_WEBUI_SOURCE_DIR",
     "enable_scheduler": "EVOSCIENTIST_ENABLE_SCHEDULER",
     "scheduler_default_timezone": "EVOSCIENTIST_SCHEDULER_DEFAULT_TIMEZONE",
     "code_interpreter_timeout": "EVOSCIENTIST_CODE_INTERPRETER_TIMEOUT",
@@ -829,7 +842,7 @@ def get_effective_config(
     Returns:
         EvoScientistConfig with merged values.
     """
-    load_dotenv(find_dotenv(usecwd=True), override=False)
+    load_dotenv(find_dotenv(usecwd=True), override=True)
 
     # Start with file config (includes defaults for missing values)
     config = load_config()
@@ -916,6 +929,22 @@ def apply_config_to_env(config: EvoScientistConfig) -> None:
         os.environ["TAVILY_API_KEY"] = config.tavily_api_key
     if config.reasoning_effort and not os.environ.get("EVOSCIENTIST_REASONING_EFFORT"):
         os.environ["EVOSCIENTIST_REASONING_EFFORT"] = config.reasoning_effort
+    if config.openrouter_http_referer and not os.environ.get(
+        "EVOSCIENTIST_OPENROUTER_HTTP_REFERER"
+    ):
+        os.environ["EVOSCIENTIST_OPENROUTER_HTTP_REFERER"] = (
+            config.openrouter_http_referer
+        )
+    if config.openrouter_app_title and not os.environ.get(
+        "EVOSCIENTIST_OPENROUTER_APP_TITLE"
+    ):
+        os.environ["EVOSCIENTIST_OPENROUTER_APP_TITLE"] = config.openrouter_app_title
+    if config.openrouter_app_categories and not os.environ.get(
+        "EVOSCIENTIST_OPENROUTER_APP_CATEGORIES"
+    ):
+        os.environ["EVOSCIENTIST_OPENROUTER_APP_CATEGORIES"] = (
+            config.openrouter_app_categories
+        )
     if not config.openrouter_anthropic_prompt_cache and not os.environ.get(
         "EVOSCIENTIST_OPENROUTER_ANTHROPIC_PROMPT_CACHE"
     ):

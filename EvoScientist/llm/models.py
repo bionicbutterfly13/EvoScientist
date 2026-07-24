@@ -10,18 +10,28 @@ endpoints) and convenient short names for common models.
 from __future__ import annotations
 
 import os
+import re
+import subprocess
 import warnings
+from functools import lru_cache
 from typing import Any
+from urllib.parse import urlparse
 
 from langchain.chat_models import init_chat_model
 
+from ..config.settings import (
+    OPENROUTER_DEFAULT_APP_CATEGORIES,
+    OPENROUTER_DEFAULT_APP_TITLE,
+    OPENROUTER_DEFAULT_HTTP_REFERER,
+)
 from .context_window import apply_known_context_window
+from .deepseek import EvoChatDeepSeek
 from .patches import (
     _is_ccproxy_codex,
     _patch_ccproxy_system_to_developer,
-    _patch_deepseek_reasoning_passback,
     _patch_openai_compat_content,
     _patch_openrouter_strip_responses_reasoning,
+    _patch_openrouter_structured_output,
 )
 
 _MINIMAX_ANTHROPIC_BASE_URL = "https://api.minimaxi.com/anthropic"
@@ -33,20 +43,66 @@ _VOLCENGINE_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 _DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 _DASHSCOPE_CODE_BASE_URL = "https://coding.dashscope.aliyuncs.com/v1"
 
-_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 _MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 _KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/"
 
-# Codex CLI version advertised to the ChatGPT Codex backend when routing
-# through ccproxy. The backend gates current models on the client version
-# ("The '<model>' model requires a newer version of Codex"); override with
-# EVOSCIENTIST_CODEX_CLIENT_VERSION if this pin falls behind.
-_CODEX_CLIENT_VERSION = "0.142.5"
+# Minimum Codex CLI version advertised when no explicit override is set. Newer
+# installed versions are advertised automatically.
+_CODEX_CLIENT_VERSION_FALLBACK = "0.144.1"
+
+
+@lru_cache(maxsize=1)
+def _installed_codex_client_version() -> str:
+    """Return the installed Codex CLI version, or an empty string."""
+    try:
+        result = subprocess.run(
+            ["codex", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+    if result.returncode != 0:
+        return ""
+    match = re.search(r"\b(\d+\.\d+\.\d+)\b", result.stdout + result.stderr)
+    return match.group(1) if match else ""
+
+
+def _resolve_codex_client_version() -> str:
+    """Resolve an explicit override or the newer of installed and minimum versions."""
+    override = os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
+    if override:
+        return override
+
+    installed = _installed_codex_client_version()
+    if installed and tuple(map(int, installed.split("."))) >= tuple(
+        map(int, _CODEX_CLIENT_VERSION_FALLBACK.split("."))
+    ):
+        return installed
+    return _CODEX_CLIENT_VERSION_FALLBACK
+
+
+def _resolve_reasoning_effort(default: str) -> str:
+    """Return the configured reasoning effort or a provider-specific default."""
+    return os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or default
+
+
+def _is_deepseek_endpoint(base_url: str | None) -> bool:
+    """Return whether an OpenAI-compatible endpoint is DeepSeek's API."""
+    if not base_url:
+        return False
+    try:
+        return urlparse(base_url).hostname == "api.deepseek.com"
+    except ValueError:
+        return False
+
 
 # Providers routed through the OpenAI provider with a custom base_url.
 # Maps provider name → (base_url or None, env var for API key).
 _OPENAI_ROUTED_PROVIDERS: dict[str, tuple[str | None, str]] = {
-    "deepseek": (_DEEPSEEK_BASE_URL, "DEEPSEEK_API_KEY"),
     "moonshot": (_MOONSHOT_BASE_URL, "MOONSHOT_API_KEY"),
     "siliconflow": (_SILICONFLOW_BASE_URL, "SILICONFLOW_API_KEY"),
     "zhipu": (_ZHIPU_BASE_URL, "ZHIPU_API_KEY"),
@@ -74,6 +130,21 @@ _THINKING_CAPABLE_PROVIDERS: set[str] = {"minimax"}
 _TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 _FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
 
+# OpenRouter app attribution (issue #339). Default values are the single source
+# of truth in config/settings.py (imported above); langchain-openrouter maps
+# app_url → HTTP-Referer, app_title → X-Title, app_categories →
+# X-OpenRouter-Categories. OpenRouter honors at most this many categories per
+# request (server-side limit) and silently ignores the rest, so the sent list is
+# capped to this many below. https://openrouter.ai/docs/app-attribution
+_OPENROUTER_MAX_CATEGORIES_PER_REQUEST = 2
+
+# Moonshot rejects a forced tool choice while thinking is enabled, and kimi-k3
+# cannot disable thinking — structured output must use json_schema there.
+# Moonshot-specific: do NOT widen to other mandatory-reasoning models.
+_OPENROUTER_JSON_SCHEMA_STRUCTURED_OUTPUT_MODELS = frozenset(
+    {"moonshotai/kimi-k3", "moonshotai/kimi-k3-20260715"}
+)
+
 # Model registry: list of (short_name, model_id, provider)
 # Allows same short_name across different providers.
 _MODEL_ENTRIES: list[tuple[str, str, str]] = [
@@ -95,6 +166,9 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("claude-sonnet-4-6", "claude-sonnet-4-6", "anthropic"),
     ("claude-haiku-4-5", "claude-haiku-4-5", "anthropic"),
     # OpenAI
+    ("gpt-5.6-sol", "gpt-5.6-sol", "openai"),
+    ("gpt-5.6-terra", "gpt-5.6-terra", "openai"),
+    ("gpt-5.6-luna", "gpt-5.6-luna", "openai"),
     ("gpt-5.5-pro", "gpt-5.5-pro", "openai"),
     ("gpt-5.5", "gpt-5.5", "openai"),
     ("gpt-5.4", "gpt-5.4", "openai"),
@@ -151,6 +225,9 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("claude-opus-4.8-fast", "anthropic/claude-opus-4.8-fast", "openrouter"),
     ("claude-sonnet-5", "anthropic/claude-sonnet-5", "openrouter"),
     ("claude-sonnet-4.6", "anthropic/claude-sonnet-4.6", "openrouter"),
+    ("gpt-5.6-sol", "openai/gpt-5.6-sol", "openrouter"),
+    ("gpt-5.6-terra", "openai/gpt-5.6-terra", "openrouter"),
+    ("gpt-5.6-luna", "openai/gpt-5.6-luna", "openrouter"),
     ("gpt-5.5-pro", "openai/gpt-5.5-pro", "openrouter"),
     ("gpt-5.5", "openai/gpt-5.5", "openrouter"),
     ("gpt-5.4", "openai/gpt-5.4", "openrouter"),
@@ -158,6 +235,7 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("gemini-3.5-flash", "google/gemini-3.5-flash", "openrouter"),
     ("gemini-3.1-pro", "google/gemini-3.1-pro-preview", "openrouter"),
     ("gemini-3-flash", "google/gemini-3-flash-preview", "openrouter"),
+    ("kimi-k3", "moonshotai/kimi-k3", "openrouter"),
     ("kimi-k2.6", "moonshotai/kimi-k2.6", "openrouter"),
     ("glm-5.2", "z-ai/glm-5.2", "openrouter"),
     ("glm-5v-turbo", "z-ai/glm-5v-turbo", "openrouter"),
@@ -165,7 +243,8 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("mimo-v2.5-pro", "xiaomi/mimo-v2.5-pro", "openrouter"),
     ("mimo-v2.5", "xiaomi/mimo-v2.5", "openrouter"),
     ("grok-build-0.1", "x-ai/grok-build-0.1", "openrouter"),
-    ("grok-4.3", "x-ai/grok-4.3", "openrouter"),
+    ("grok-4.5", "x-ai/grok-4.5", "openrouter"),
+    ("hy3", "tencent/hy3", "openrouter"),
     ("qwen3.7-max", "qwen/qwen3.7-max", "openrouter"),
     ("qwen3.7-plus", "qwen/qwen3.7-plus", "openrouter"),
     ("qwen3.6-flash", "qwen/qwen3.6-flash", "openrouter"),
@@ -221,6 +300,7 @@ _MODEL_ENTRIES: list[tuple[str, str, str]] = [
     ("deepseek-r1", "deepseek-reasoner", "deepseek"),
     ("deepseek-v3", "deepseek-chat", "deepseek"),
     # Moonshot (OpenAI-compatible)
+    ("kimi-k3", "kimi-k3", "moonshot"),
     ("kimi-k2.6", "kimi-k2.6", "moonshot"),
     ("kimi-k2.5", "kimi-k2.5", "moonshot"),
     ("kimi-k2-thinking", "kimi-k2-thinking", "moonshot"),
@@ -308,6 +388,22 @@ def _apply_openrouter_anthropic_prompt_cache(
     kwargs.setdefault("model_kwargs", {})["cache_control"] = {"type": "ephemeral"}
 
 
+def _enable_openrouter_429_retry(chat_model: Any) -> None:
+    """Add 429 to the OpenRouter SDK's retryable status codes (default ["5XX"]).
+
+    Upstream rate limits ("temporarily rate-limited upstream", whose
+    Retry-After the SDK backoff already honors) otherwise fail the run outright.
+    """
+    sdk_config = getattr(getattr(chat_model, "client", None), "sdk_configuration", None)
+    retry_config: Any = getattr(sdk_config, "retry_config", None)
+    # Skip the UNSET sentinel (max_retries=0) and explicit caller overrides.
+    if not hasattr(retry_config, "status_codes_override"):
+        return
+    if retry_config.status_codes_override:
+        return
+    retry_config.status_codes_override = ["429", "5XX"]
+
+
 def _apply_auto_config(
     provider: str,
     model_id: str,
@@ -341,16 +437,18 @@ def _apply_auto_config(
 
     # OpenAI (native, not third-party routed): reasoning
     if provider == "openai" and not is_third_party and "reasoning" not in kwargs:
-        if _is_ccproxy_codex():
-            # ccproxy uses Chat Completions which doesn't support reasoning.
-            pass
-        else:
-            _eff = os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or (
-                "xhigh"
-                if ("5.4" in model_id or "5.5" in model_id or "codex" in model_id)
-                else "high"
+        _default_effort = (
+            "xhigh"
+            if (
+                "5.4" in model_id
+                or "5.5" in model_id
+                or "5.6" in model_id
+                or "codex" in model_id
             )
-            kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
+            else "high"
+        )
+        _eff = _resolve_reasoning_effort(_default_effort)
+        kwargs["reasoning"] = {"effort": _eff, "summary": "auto"}
 
     # Google GenAI: surface thinking traces
     if provider == "google-genai":
@@ -452,17 +550,21 @@ def get_chat_model(
                 # client's identity. Without Codex-CLI-shaped headers it
                 # rejects current models ("The '<model>' model requires
                 # a newer version of Codex").
-                _codex_ver = (
-                    os.environ.get("EVOSCIENTIST_CODEX_CLIENT_VERSION", "").strip()
-                    or _CODEX_CLIENT_VERSION
-                )
-                _headers = kwargs.setdefault("default_headers", {})
+                _codex_ver = _resolve_codex_client_version()
+                _headers = kwargs.get("default_headers") or {}
+                kwargs["default_headers"] = _headers
                 _headers.setdefault("originator", "codex_cli_rs")
                 _headers.setdefault("version", _codex_ver)
                 _headers.setdefault(
-                    "User-Agent", f"codex_cli_rs/{_codex_ver} (EvoScientist)"
+                    "User-Agent",
+                    f"codex_cli_rs/{_headers['version']} (EvoScientist)",
                 )
         api_key = os.environ.get("OPENAI_API_KEY", "")
+        if api_key:
+            kwargs["api_key"] = api_key
+
+    elif provider == "deepseek":
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
         if api_key:
             kwargs["api_key"] = api_key
 
@@ -490,10 +592,12 @@ def get_chat_model(
         # from history, causing error 20015 on multi-turn requests.
         if provider == "siliconflow":
             kwargs.setdefault("extra_body", {})["enable_thinking"] = False
-        # Moonshot: disable thinking for all models to prevent LangChain from dropping
-        # reasoning_content, which causes multi-turn conversation errors (error 20015).
-        # Even native thinking models like kimi-k2-thinking operate in non-thinking mode.
-        if provider == "moonshot":
+        # Moonshot: disable thinking for pre-K3 models to prevent LangChain from
+        # dropping reasoning_content, which causes multi-turn conversation errors
+        # (error 20015). Even native thinking models like kimi-k2-thinking operate
+        # in non-thinking mode. kimi-k3+ is exempt: always-thinking, and
+        # Moonshot's K3 guide forbids the K2.x `thinking` parameter for it.
+        if provider == "moonshot" and not model_id.startswith("kimi-k3"):
             kwargs.setdefault("extra_body", {})["thinking"] = {"type": "disabled"}
         provider = "openai"
 
@@ -509,9 +613,59 @@ def get_chat_model(
         # passback (OpenRouter's `/responses` beta is stateless, store=false —
         # "Item with id 'rs_...' not found"); the patch strips them on passback,
         # so enabling `summary` is safe. See langchain-ai/langchain#37777.
-        effort = os.environ.get("EVOSCIENTIST_REASONING_EFFORT", "").strip() or "high"
+        # Note: mandatory-reasoning endpoints (kimi-k3, grok-4.5, …) reject
+        # effort "none" with HTTP 400 — that error is surfaced to the user
+        # as-is; pick a real effort (low+) for those models.
+        effort = _resolve_reasoning_effort("high")
         kwargs.setdefault("reasoning", {"effort": effort, "summary": "auto"})
+        # App attribution (issue #339): identify EvoScientist to OpenRouter so
+        # usage is credited to the project (app rankings, model app tabs,
+        # analytics) rather than langchain-openrouter's LangChain-branded
+        # defaults. setdefault so an explicit caller kwarg wins; values are
+        # configurable via EVOSCIENTIST_OPENROUTER_* env (fed from the config
+        # file by apply_config_to_env). Applied only here, so no other provider
+        # ever receives these kwargs.
+        kwargs.setdefault(
+            "app_url",
+            os.environ.get("EVOSCIENTIST_OPENROUTER_HTTP_REFERER", "").strip()
+            or OPENROUTER_DEFAULT_HTTP_REFERER,
+        )
+        kwargs.setdefault(
+            "app_title",
+            os.environ.get("EVOSCIENTIST_OPENROUTER_APP_TITLE", "").strip()
+            or OPENROUTER_DEFAULT_APP_TITLE,
+        )
+        # app_categories must be a list[str] (langchain-openrouter joins it into
+        # the X-OpenRouter-Categories header); split the comma-separated config
+        # value and drop blanks so a stray comma/space can't emit an empty one.
+        _app_categories_raw = (
+            os.environ.get("EVOSCIENTIST_OPENROUTER_APP_CATEGORIES", "").strip()
+            or OPENROUTER_DEFAULT_APP_CATEGORIES
+        )
+        _app_categories = [
+            c.strip() for c in _app_categories_raw.split(",") if c.strip()
+        ]
+        # Cap to the per-request limit and warn, so a misconfigured extra is
+        # dropped predictably here (and surfaced to the user) rather than being
+        # silently truncated server-side.
+        _limit = _OPENROUTER_MAX_CATEGORIES_PER_REQUEST
+        if len(_app_categories) > _limit:
+            warnings.warn(
+                f"OpenRouter accepts at most {_limit} app categories per "
+                f"request, so only the first {_limit} are sent: "
+                f"{_app_categories[:_limit]}. Ignoring the rest: "
+                f"{_app_categories[_limit:]}. Set "
+                f"EVOSCIENTIST_OPENROUTER_APP_CATEGORIES (or the "
+                f"openrouter_app_categories config) to at most {_limit} "
+                f"categories to silence this warning.",
+                UserWarning,
+                stacklevel=2,
+            )
+            _app_categories = _app_categories[:_limit]
+        if _app_categories:
+            kwargs.setdefault("app_categories", _app_categories)
         _patch_openrouter_strip_responses_reasoning()
+        _patch_openrouter_structured_output()
 
     # Anthropic-routed providers → route through Anthropic provider with base_url
     elif provider in _ANTHROPIC_ROUTED_PROVIDERS:
@@ -548,10 +702,23 @@ def get_chat_model(
     _apply_auto_config(provider, model_id, _is_third_party, kwargs, _original_provider)
     _apply_openrouter_anthropic_prompt_cache(provider, model_id, kwargs)
 
+    _uses_native_deepseek = provider == "deepseek" or (
+        provider == "openai"
+        and _original_provider == "custom-openai"
+        and _is_deepseek_endpoint(kwargs.get("base_url"))
+    )
+
     # User-level override for the OpenAI Responses API vs Chat Completions.
     # When "false", force Chat Completions and drop reasoning (which triggers
     # the Responses API path in langchain-openai). Only applies to OpenAI.
-    if provider == "openai":
+    if _uses_native_deepseek:
+        if kwargs.get("use_responses_api") is True:
+            raise ValueError(
+                "DeepSeek does not support the OpenAI Responses API. "
+                "Remove use_responses_api=True."
+            )
+        kwargs.pop("use_responses_api", None)
+    elif provider == "openai":
         _responses_api_setting = (
             os.environ.get("EVOSCIENTIST_USE_RESPONSES_API", "").strip().lower()
         )
@@ -561,18 +728,29 @@ def get_chat_model(
         elif _responses_api_setting == "true":
             kwargs["use_responses_api"] = True
 
-    chat_model = init_chat_model(model=model_id, model_provider=provider, **kwargs)
+    if _is_openai_proxy and kwargs.get("use_responses_api") is True:
+        reasoning = kwargs.setdefault("reasoning", {})
+        if isinstance(reasoning, dict):
+            reasoning = dict(reasoning)
+            reasoning.setdefault("context", "all_turns")
+            kwargs["reasoning"] = reasoning
+
+    if _uses_native_deepseek:
+        chat_model = EvoChatDeepSeek(model=model_id, **kwargs)
+    else:
+        chat_model = init_chat_model(model=model_id, model_provider=provider, **kwargs)
 
     # Sanitize history before provider API calls.
     # - OpenAI-compatible providers need list content flattened to avoid
     #   "sequence expected string" errors.
     # - Native Anthropic accepts media blocks, but rejects replayed thinking
     #   blocks in historical assistant messages (422 "Input tag 'thinking'").
-    #   Reuse the same sanitizer with media preserved / no tool-media hoist.
+    #   Reuse the same sanitizer with media preserved and no tool-media hoist.
     # Moonshot and Kimi Coding support standard format, no patch needed.
     _no_patch_providers = {"moonshot", "kimi-coding"}
     if (
-        _is_third_party or _is_openai_proxy or provider == "anthropic"
+        provider == "anthropic"
+        or ((_is_third_party or _is_openai_proxy) and not _uses_native_deepseek)
     ) and _original_provider not in _no_patch_providers:
         # Anthropic-routed providers accept media in tool results natively;
         # only OpenAI-compatible providers need tool-media hoisting.
@@ -582,13 +760,11 @@ def get_chat_model(
         )
         _patch_openai_compat_content(chat_model, hoist_tool_media=_hoist)
 
-    # DeepSeek thinking mode requires reasoning_content passback in multi-turn
-    # + tool_use scenarios.
-    if _original_provider == "deepseek":
-        _patch_deepseek_reasoning_passback(chat_model)
-
     if _is_openai_proxy:
         _patch_ccproxy_system_to_developer(chat_model)
+
+    if provider == "openrouter":
+        _enable_openrouter_429_retry(chat_model)
 
     apply_known_context_window(chat_model)
 
