@@ -13,10 +13,12 @@ of truth.
 
 ## Design notebook snapshot
 
-- Prepared: 2026-07-22
+- Prepared: 2026-07-22; float32-transport fix applied 2026-07-24 after the
+  first Colab run (see "Runtime fix" below)
 - Notebook name: `jspace_colab_stage2_discrimination.ipynb`
-- Canonical source identity: 52,245 bytes; SHA-256
-  `4ec078945e8eec7be8646f775048a88511af6a3237a7262999c42c3bbf35a6a1`
+- Canonical source identity: 52,253 bytes; SHA-256
+  `95fc7efe541753599d399af393a58ede673c2896682961d5f4cda3152b383e8b`
+  (pre-fix identity was 52,245 bytes / `4ec07894...4f10d7656d9809`)
 - Structure: nbformat 4, 22 cells, 10 code cells
 - Stage: 2 (observational discrimination) per `SKILL.md`, "Experiment Stage Gates"
 - Prerequisite: Stage 1 (measurement reproduction) partially completed by the
@@ -144,3 +146,22 @@ aggregate artifact re-hashes to its content-addressed filename prefix.
 3. Verify batched/sequential application across 50 prompts stays within T4
    memory; if not, that is a measured capacity result, handled by sequential
    execution or a larger runtime, not by weakening the gate.
+
+## Runtime fix (2026-07-24, first Colab T4 run)
+
+All three verification items above were resolved at execution time on a Tesla
+T4: the capability probe bound `lens.transport` (item 1); GPU memory after load
+was ~3.2 GiB of ~14.5 (item 3); the prompt-only unembed path matched (item 2).
+
+One runtime defect surfaced and was fixed. jlens stores its fitted Jacobians as
+float32 and its own `lens.apply` casts residuals to float before transport, but
+the notebook's baseline paths (`random_vector_readout` and the structure-broken
+transports) fed the model's bfloat16 activations from `capture_layer_residuals`
+straight into `lens.transport`, raising `RuntimeError: expected mat1 and mat2 to
+have the same dtype (BFloat16 != float)` at `jlens/lens.py` `transport`. Fix:
+capture residuals as float32 (`...detach().float()`), so every vector
+transported through a Jacobian is float32, matching jlens; `decode_residual`
+still casts back to the model dtype for the final norm+unembed. This is the
+notebook identity change recorded above (`95fc7efe...`). Reproduction lesson:
+when transporting your own activations through a jlens `JacobianLens` outside
+`lens.apply`, cast them to float32 first.
