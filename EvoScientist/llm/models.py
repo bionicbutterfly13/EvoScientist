@@ -728,6 +728,13 @@ def get_chat_model(
         elif _responses_api_setting == "true":
             kwargs["use_responses_api"] = True
 
+    if _is_openai_proxy and kwargs.get("use_responses_api") is True:
+        reasoning = kwargs.setdefault("reasoning", {})
+        if isinstance(reasoning, dict):
+            reasoning = dict(reasoning)
+            reasoning.setdefault("context", "all_turns")
+            kwargs["reasoning"] = reasoning
+
     if _uses_native_deepseek:
         chat_model = EvoChatDeepSeek(model=model_id, **kwargs)
     else:
